@@ -7,7 +7,7 @@ from Arm import arm_move
 
 device = Dobot(port='/dev/ttyUSB2')    
 
-cap = cv2.VideoCapture(2, cv2.CAP_DSHOW) # Sesuaikan indeks kamera
+cap = cv2.VideoCapture(0) # Sesuaikan indeks kamera
 
 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 cap.set(cv2.CAP_PROP_FPS, 30)
@@ -30,7 +30,7 @@ color_ranges = {
 # --- DEFINISI KOTAK ROI (Tetap di layar) ---
 # Format: X_awal, Y_awal, Lebar, Tinggi
 # Sesuaikan angka ini dengan posisi fisik conveyor Anda di kamera
-ROI_X, ROI_Y, ROI_W, ROI_H = 220, 100, 140, 280
+ROI_X, ROI_Y, ROI_W, ROI_H = 325, 100, 140, 280
 
 while True:
     ret, frame = cap.read()
