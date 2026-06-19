@@ -65,7 +65,7 @@ def arm_move(device, cam_x, cam_y, color):
     device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
 
     # 3. Turun dan ambil objek
-    print("[ARmM] Turun mengabil objek...")
+    print("[ARM] Turun mengabil objek...")
     device.move_to(target_x, target_y, Z_PICK, HOME_R, wait=True)
     
     # Nyalakan pompa hisap (Suction Cup) - Sesuaikan jika Anda pakai Gripper
