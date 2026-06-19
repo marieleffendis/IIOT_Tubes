@@ -16,6 +16,9 @@ def init_dobot():
     try:
         device = Dobot(port=port)
         print("[INFO] Dobot terhubung berhasil.")
+        print("[INFO] Memulai proses Homing. Pastikan area sekitar robot KOSONG!")
+        # wait=True sangat penting agar program tidak lanjut sebelum homing selesai
+        device.home(wait=True)
         return device
     except Exception as e:
         print(f"[ERROR] Gagal connect ke Dobot: {e}")

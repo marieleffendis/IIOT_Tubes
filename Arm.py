@@ -9,8 +9,8 @@ Z_PICK = -10   # Ketinggian saat menempel pada objek (menyentuh conveyor)
 HOME_R = 0     # Rotasi default end-effector
 
 # Titik istirahat robot (Home)
-HOME_X = 250
-HOME_Y = 0
+HOME_X = 4.5
+HOME_Y = 270
 HOME_Z = 50
 
 pts_kamera = np.array([
@@ -77,14 +77,15 @@ def arm_move(device, cam_x, cam_y, color):
 
     # 5. Tentukan lokasi pembuangan (Drop-off) berdasarkan warna
     # (Silakan ubah koordinat X, Y pembuangan sesuai fisik di lapangan)
-    if color == "Merah":
+    """if color == "Merah":
         drop_x, drop_y = 150, 150
     elif color == "Biru":
         drop_x, drop_y = 150, -150
     elif color == "Hijau":
         drop_x, drop_y = 100, 150
     else:
-        drop_x, drop_y = 200, 100 # Default/Kuning
+        drop_x, drop_y = 200, 100 # Default/Kuning"""
+    drop_x, drop_y = 20, 233
 
     # 6. Bergerak ke keranjang warna dan jatuhkan
     print(f"[ARM] Menaruh objek {color} ke area pembuangan...")

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import time
-from pydobotplus import Dobot, CustomPosition
+from pydobotplus import Dobot
 from Conveyor import start_conveyor, stop_conveyor
 from Arm import arm_move
 
