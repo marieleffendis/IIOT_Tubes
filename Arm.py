@@ -1,4 +1,6 @@
 import time
+import numpy as np
+import cv2
 
 # --- KONFIGURASI KOORDINAT DOBOT ---
 # Sesuaikan nilai Z ini dengan kondisi fisik meja/conveyor Anda
@@ -11,17 +13,39 @@ HOME_X = 250
 HOME_Y = 0
 HOME_Z = 50
 
-def coordinate_translate(cam_x, cam_y):
+pts_kamera = np.array([
+    [340, 120], # Titik 1
+    [340, 360], # Titik 2
+    [240, 360], # Titik 3
+    [240, 120]  # Titik 4
+], dtype="float32")
+
+pts_dobot = np.array([
+    [242.4, 99.9],   # Titik 1
+    [206.2, -81.7],  # Titik 2
+    [130.0, -67.3],  # Titik 3
+    [170.5, 113.5]   # Titik 4
+], dtype="float32")
+
+# Hitung Matriks Transformasi (Persamaan)
+MATRIKS_KALIBRASI = cv2.getPerspectiveTransform(pts_kamera, pts_dobot)
+
+# --- FUNGSI TRANSLASI ---
+def coordinate_transform(cam_x, cam_y):
     """
-    Fungsi untuk menerjemahkan piksel kamera (X, Y) ke milimeter koordinat Dobot.
-    Saat ini masih berupa fungsi dummy (placeholder). 
-    Silakan masukkan rumus kalibrasi Anda di sini nanti.
+    Mengubah koordinat piksel kamera menjadi milimeter Dobot.
     """
-    # TODO: Ganti dengan rumus kalibrasi (misal: regresi linear atau matriks affine)
-    dobot_x = cam_x  
-    dobot_y = cam_y  
+    # Bentuk array sesuai format yang diminta OpenCV
+    titik_kamera = np.array([[[float(cam_x), float(cam_y)]]], dtype="float32")
     
-    return dobot_x, dobot_y
+    # Aplikasikan persamaan matriks
+    titik_dobot = cv2.perspectiveTransform(titik_kamera, MATRIKS_KALIBRASI)
+    
+    # Ekstrak hasil X dan Y
+    dobot_x = titik_dobot[0][0][0]
+    dobot_y = titik_dobot[0][0][1]
+    
+    return round(dobot_x, 2), round(dobot_y, 2)
 
 def arm_move(device, cam_x, cam_y, color):
     """
@@ -32,7 +56,7 @@ def arm_move(device, cam_x, cam_y, color):
         return
 
     # 1. Terjemahkan koordinat
-    target_x, target_y = coordinate_translate(cam_x, cam_y)
+    target_x, target_y = coordinate_transform(cam_x, cam_y)
     print(f"[ARM] Menerima tugas: Objek {color} di Kam({cam_x}, {cam_y}) -> Dobot({target_x}, {target_y})")
 
     # 2. Bergerak ke atas objek (Hover)
