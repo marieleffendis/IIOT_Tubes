@@ -12,7 +12,7 @@ def init_dobot():
         print("[ERROR] Tidak ada port serial yang ditemukan.")
         return None
 
-    port = available_ports[1].device
+    port = available_ports[0].device
     print(f"[INFO] Mencoba terhubung ke Dobot di port: {port}...")
     try:
         device = Dobot(port=port)
