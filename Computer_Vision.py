@@ -4,7 +4,8 @@ import time
 from pydobotplus import Dobot, CustomPosition
 from Conveyor import start_conveyor, stop_conveyor
 from Arm import arm_move
-    
+
+device = Dobot(port='COM3')    
 
 cap = cv2.VideoCapture(2, cv2.CAP_DSHOW) # Sesuaikan indeks kamera
 
@@ -95,7 +96,7 @@ while True:
 
                     # Panggil fungsi lengan robot dengan koordinat GLOBAL
                     print(f"[AKSI] Robotic arm bergerak ke ({cX_global}, {cY_global}) untuk mengambil objek {color_name}")
-                    arm_move(Dobot, cX_global, cY_global, color_name)
+                    arm_move(device, cX_global, cY_global, color_name)
                     time.sleep(10) # Simulasi waktu kerja lengan robot
                     print(f"[AKSI] Selesai mengambil {color_name}.")
                     
