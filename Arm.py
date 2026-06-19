@@ -14,17 +14,17 @@ HOME_Y = 0
 HOME_Z = 50
 
 pts_kamera = np.array([
-    [340, 120], # Titik 1
-    [340, 360], # Titik 2
-    [240, 360], # Titik 3
-    [240, 120]  # Titik 4
+    [440, 120], # Titik 1
+    [440, 360], # Titik 2
+    [340, 360], # Titik 3
+    [340, 120]  # Titik 4
 ], dtype="float32")
 
 pts_dobot = np.array([
-    [242.4, 99.9],   # Titik 1
-    [206.2, -81.7],  # Titik 2
-    [130.0, -67.3],  # Titik 3
-    [170.5, 113.5]   # Titik 4
+    [168.5, -196],   # Titik 1
+    [-14.6, -217.4],  # Titik 2
+    [-24.4, -142.1],  # Titik 3
+    [156.9, -118.8]   # Titik 4
 ], dtype="float32")
 
 # Hitung Matriks Transformasi (Persamaan)

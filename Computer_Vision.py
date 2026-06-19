@@ -5,7 +5,7 @@ from pydobotplus import Dobot, CustomPosition
 from Conveyor import start_conveyor, stop_conveyor
 from Arm import arm_move
 
-device = Dobot(port='COM3')    
+device = Dobot(port='/dev/ttyUSB2')    
 
 cap = cv2.VideoCapture(2, cv2.CAP_DSHOW) # Sesuaikan indeks kamera
 
@@ -118,4 +118,5 @@ while True:
         break
 
 cap.release()
+device.close()
 cv2.destroyAllWindows()
