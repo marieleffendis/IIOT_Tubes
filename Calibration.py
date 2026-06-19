@@ -1,21 +1,14 @@
 import cv2
 import numpy as np
-import time
-from pydobotplus import Dobot, CustomPosition
-from Conveyor import start_conveyor, stop_conveyor
-from Arm import arm_move
-    
 
+# --- Inisialisasi Kamera ---
 cap = cv2.VideoCapture(2, cv2.CAP_DSHOW) # Sesuaikan indeks kamera
 
 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 cap.set(cv2.CAP_PROP_FPS, 30)
 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-# Inisialisasi status conveyor di LUAR loop agar tidak terus-menerus di-reset
-conveyor_running = True
-start_conveyor() 
-
+# --- Rentang Warna ---
 color_ranges = {
     "Merah": [
         (np.array([0, 120, 70]), np.array([10, 255, 255])),
@@ -26,10 +19,12 @@ color_ranges = {
     "Biru": [(np.array([100, 150, 0]), np.array([140, 255, 255]))]
 }
 
-# --- DEFINISI KOTAK ROI (Tetap di layar) ---
-# Format: X_awal, Y_awal, Lebar, Tinggi
-# Sesuaikan angka ini dengan posisi fisik conveyor Anda di kamera
+# --- Definisi Kotak ROI ---
 ROI_X, ROI_Y, ROI_W, ROI_H = 220, 100, 140, 280
+
+print("=== PROGRAM KALIBRASI KAMERA DIMULAI ===")
+print("Taruh objek di atas area ROI untuk melihat koordinatnya.")
+print("Tekan 'q' pada jendela kamera untuk keluar.\n")
 
 while True:
     ret, frame = cap.read()
@@ -44,15 +39,14 @@ while True:
 
     # 2. Potong frame hanya pada area ROI
     roi_frame = frame[ROI_Y:ROI_Y + ROI_H, ROI_X:ROI_X + ROI_W]
-    
-    # 3. Ubah warna HANYA pada bagian ROI
     hsv = cv2.cvtColor(roi_frame, cv2.COLOR_BGR2HSV)
     
     object_processed = False
 
+    # 3. Proses deteksi warna
     for color_name, ranges in color_ranges.items():
         if object_processed: 
-            break # Hentikan pencarian warna lain jika sudah ada 1 objek yang diproses
+            break
 
         mask = np.zeros(hsv.shape[:2], dtype="uint8")
         for lower, upper in ranges:
@@ -69,49 +63,28 @@ while True:
             if cv2.contourArea(c) > 500:
                 M = cv2.moments(c)
                 if M["m00"] != 0:
-                    # 4. Hitung titik tengah LOKAL (relatif terhadap ROI)
                     cX_roi = int(M["m10"] / M["m00"])
                     cY_roi = int(M["m01"] / M["m00"])
                     
-                    # 5. Konversi ke titik tengah GLOBAL (relatif terhadap frame utama)
                     cX_global = cX_roi + ROI_X
                     cY_global = cY_roi + ROI_Y
                     
-                    # Matikan conveyor
-                    if conveyor_running:
-                        stop_conveyor()
-                        conveyor_running = False
-                    
-                    # Gambar bounding box dan centroid menggunakan koordinat GLOBAL
+                    # Gambar bounding box dan centroid
                     x, y, w, h = cv2.boundingRect(c)
                     cv2.rectangle(frame, (x + ROI_X, y + ROI_Y), (x + w + ROI_X, y + h + ROI_Y), (0, 255, 0), 2)
                     cv2.circle(frame, (cX_global, cY_global), 5, (255, 255, 255), -1)
-                    cv2.putText(frame, f"{color_name} Center", (cX_global - 20, cY_global - 20), 
+                    cv2.putText(frame, f"{color_name} (X:{cX_global}, Y:{cY_global})", 
+                                (cX_global - 20, cY_global - 20), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-                    # Update tampilan SEBELUM arm memblokir program
-                    cv2.imshow("Camera Feed", frame)
-                    cv2.waitKey(1)
-
-                    # Panggil fungsi lengan robot dengan koordinat GLOBAL
-                    print(f"[AKSI] Robotic arm bergerak ke ({cX_global}, {cY_global}) untuk mengambil objek {color_name}")
-                    arm_move(Dobot, cX_global, cY_global, color_name)
-                    time.sleep(10) # Simulasi waktu kerja lengan robot
-                    print(f"[AKSI] Selesai mengambil {color_name}.")
+                    # [PENTING] Print koordinat secara kontinu ke terminal
+                    print(f"Kalibrasi - {color_name} -> X_Pixel: {cX_global} | Y_Pixel: {cY_global}")
                     
-                    # Nyalakan kembali setelah selesai
-                    conveyor_running = True
-                    start_conveyor()
                     object_processed = True
-
-                    for _ in range(5):
-                        ret_flush, frame_flush = cap.read()
-                    
                     break 
 
-    # Update tampilan jika tidak ada objek yang diproses di iterasi ini
-    if not object_processed:
-        cv2.imshow("Camera Feed", frame)
+    # Update tampilan
+    cv2.imshow("Kalibrasi Kamera", frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
