@@ -134,5 +134,5 @@ def run_camera():
     cap.release()
     cv2.destroyAllWindows()
 
-if _name_ == "_main_":
+if __name__ == "_main_":
     run_camera()
