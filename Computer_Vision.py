@@ -9,11 +9,11 @@ def conveyor(state):
     state 1: ON, state 0: OFF
     """
     if state == 0:
-        print("[AKSI] Conveyor off")
-        # stop_conveyor()
+        stop_conveyor()
+        #print("[AKSI] Conveyor off")
     elif state == 1:
-        # start_conveyor()
-        print("[AKSI] Conveyor on")
+        start_conveyor()
+        #print("[AKSI] Conveyor on")
 
 def arm_works(cx, cy, color):
     # Fungsi ini akan dipanggil setelah conveyor mati

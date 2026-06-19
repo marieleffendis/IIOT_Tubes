@@ -1,7 +1,7 @@
 from serial.tools import list_ports
 from pydobotplus import Dobot
 
-CONVEYOR_SPEED = 1
+CONVEYOR_SPEED = 0.75       
 CONVEYOR_DELAY = 1.16
 
 def init_dobot():
