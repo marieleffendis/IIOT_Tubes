@@ -90,7 +90,7 @@ def arm_move(device, cam_x, cam_y, color):
     # 6. Bergerak ke keranjang warna dan jatuhkan
     print(f"[ARM] Menaruh objek {color} ke area pembuangan...")
     device.move_to(drop_x, drop_y, Z_HOVER, HOME_R, wait=True)
-    device.move_to(drop_x, drop_y, Z_PICK, HOME_R, wait=True)
+    device.move_to(drop_x, drop_y, -45, HOME_R, wait=True)
     
     # Matikan hisapan
     device.suck(False)

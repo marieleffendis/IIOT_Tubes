@@ -66,23 +66,32 @@ while True:
             c = max(contours, key=cv2.contourArea)
             
             if cv2.contourArea(c) > 500:
-                M = cv2.moments(c)
-                if M["m00"] != 0:
-                    # 4. Hitung titik tengah LOKAL (relatif terhadap ROI)
-                    cX_roi = int(M["m10"] / M["m00"])
-                    cY_roi = int(M["m01"] / M["m00"])
+                # 1. Dapatkan kotak pembatas (Bounding Box) dari objek
+                x, y, w, h = cv2.boundingRect(c)
+                
+                # 2. Tentukan zona aman (margin) dari tepi pinggir ROI
+                # Angka 15 berarti objek harus berjarak minimal 15 piksel dari tepi ROI
+                margin = 15 
+                
+                # 3. Cek apakah objek sudah sepenuhnya lepas dari garis tepi ROI
+                if x > margin and y > margin and (x + w) < (ROI_W - margin) and (y + h) < (ROI_H - margin):
                     
-                    # 5. Konversi ke titik tengah GLOBAL (relatif terhadap frame utama)
-                    cX_global = cX_roi + ROI_X
-                    cY_global = cY_roi + ROI_Y
+                    # Jika kondisi ini terpenuhi, objek sudah FULL di dalam ROI!
+                    M = cv2.moments(c)
+                    if M["m00"] != 0:
+                        # Hitung titik tengah LOKAL
+                        cX_roi = int(M["m10"] / M["m00"])
+                        cY_roi = int(M["m01"] / M["m00"])
+                        
+                        # Konversi ke titik tengah GLOBAL
+                        cX_global = cX_roi + ROI_X
+                        cY_global = cY_roi + ROI_Y
+                        
+                        # Matikan conveyor
+                        if conveyor_running:
+                            stop_conveyor()
+                            conveyor_running = False
                     
-                    # Matikan conveyor
-                    if conveyor_running:
-                        stop_conveyor()
-                        conveyor_running = False
-                    
-                    # Gambar bounding box dan centroid menggunakan koordinat GLOBAL
-                    x, y, w, h = cv2.boundingRect(c)
                     cv2.rectangle(frame, (x + ROI_X, y + ROI_Y), (x + w + ROI_X, y + h + ROI_Y), (0, 255, 0), 2)
                     cv2.circle(frame, (cX_global, cY_global), 5, (255, 255, 255), -1)
                     cv2.putText(frame, f"{color_name} Center", (cX_global - 20, cY_global - 20), 

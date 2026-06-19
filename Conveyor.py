@@ -12,21 +12,21 @@ def init_dobot():
         print("[ERROR] Tidak ada port serial yang ditemukan.")
         return None
 
-    port = available_ports[0].device
+    port = available_ports[1].device
     print(f"[INFO] Mencoba terhubung ke Dobot di port: {port}...")
     try:
         device = Dobot(port=port)
         print("[INFO] Dobot terhubung berhasil.")
-        print("[INFO] Memulai proses Homing. Pastikan area sekitar robot KOSONG!")
-        # wait=True sangat penting agar program tidak lanjut sebelum homing selesai
-        print("[INFO] Menunggu homing selesai (20 detik)...")
-        device.home()
-        time.sleep(20) # Jeda manual untuk homing
-        return device
     except Exception as e:
         print(f"[ERROR] Gagal connect ke Dobot: {e}")
         return None
 
+    print("[INFO] Memulai proses Homing. Pastikan area sekitar robot KOSONG!")
+    print("[INFO] Menunggu homing selesai (20 detik)...")
+    device.home()
+    time.sleep(20) # Jeda manual untuk homing
+    print("[INFO] Homing dianggap selesai, siap menjalankan conveyor!")
+    return device
 device = init_dobot()
 
 def start_conveyor():
