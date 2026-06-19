@@ -21,10 +21,10 @@ pts_kamera = np.array([
 ], dtype="float32")
 
 pts_dobot = np.array([
-    [168.5, -196],   # Titik 1
-    [-14.6, -217.4],  # Titik 2
-    [-24.4, -142.1],  # Titik 3
-    [156.9, -118.8]   # Titik 4
+    [216.1, 141.5],   # Titik 1
+    [212.9, -43.2],  # Titik 2
+    [134.6, -43.2],  # Titik 3
+    [135.9, 142.5]   # Titik 4
 ], dtype="float32")
 
 # Hitung Matriks Transformasi (Persamaan)

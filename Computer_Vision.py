@@ -30,6 +30,8 @@ color_ranges = {
 # Sesuaikan angka ini dengan posisi fisik conveyor Anda di kamera
 ROI_X, ROI_Y, ROI_W, ROI_H = 325, 100, 140, 280
 
+arm_move(device, 4.5, 270, None)
+
 while True:
     ret, frame = cap.read()
     if not ret:
