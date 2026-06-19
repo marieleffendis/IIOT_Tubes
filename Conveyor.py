@@ -1,5 +1,6 @@
 from serial.tools import list_ports
 from pydobotplus import Dobot
+import time
 
 CONVEYOR_SPEED = 0.75       
 CONVEYOR_DELAY = 1.16
@@ -18,7 +19,9 @@ def init_dobot():
         print("[INFO] Dobot terhubung berhasil.")
         print("[INFO] Memulai proses Homing. Pastikan area sekitar robot KOSONG!")
         # wait=True sangat penting agar program tidak lanjut sebelum homing selesai
-        device.home(wait=True)
+        print("[INFO] Menunggu homing selesai (20 detik)...")
+        device.home()
+        time.sleep(20) # Jeda manual untuk homing
         return device
     except Exception as e:
         print(f"[ERROR] Gagal connect ke Dobot: {e}")
