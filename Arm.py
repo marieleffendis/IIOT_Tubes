@@ -1,98 +1,79 @@
-from pydobotplus import Dobot, CustomPosition
-from time import sleep
+import time
 
-DOBOT_ORIGIN_X   = 49      # x saat col=1
-DOBOT_ORIGIN_Y   = 200     # y saat row=1
-DOBOT_Z_PLACE    = -35.0   # z saat meletakkan blok
-DOBOT_Z_PICK     = -55.0   # z saat mengambil blok dari conveyor (estimasi, kalibrasi ulang)
-DOBOT_Z_TRAVEL   = 20.0    # z aman saat perpindahan
-DOBOT_R          = 19      # rotasi claw (tetap)
+# --- KONFIGURASI KOORDINAT DOBOT ---
+# Sesuaikan nilai Z ini dengan kondisi fisik meja/conveyor Anda
+Z_HOVER = 50   # Ketinggian aman (melayang di atas conveyor) agar tidak menabrak benda lain
+Z_PICK = -10   # Ketinggian saat menempel pada objek (menyentuh conveyor)
+HOME_R = 0     # Rotasi default end-effector
 
-def get_posisi_awal():
-    return CustomPosition(
-        DOBOT_ORIGIN_X, DOBOT_ORIGIN_Y,
-        DOBOT_Z_TRAVEL, DOBOT_R
-    )
+# Titik istirahat robot (Home)
+HOME_X = 250
+HOME_Y = 0
+HOME_Z = 50
 
-def get_posisi_kamera():
-    return CustomPosition(360, 350, DOBOT_Z_TRAVEL, DOBOT_R)
+def coordinate_translate(cam_x, cam_y):
+    """
+    Fungsi untuk menerjemahkan piksel kamera (X, Y) ke milimeter koordinat Dobot.
+    Saat ini masih berupa fungsi dummy (placeholder). 
+    Silakan masukkan rumus kalibrasi Anda di sini nanti.
+    """
+    # TODO: Ganti dengan rumus kalibrasi (misal: regresi linear atau matriks affine)
+    dobot_x = cam_x  
+    dobot_y = cam_y  
+    
+    return dobot_x, dobot_y
 
-def _grid_positions():
-    ORIGIN_X    =  49      # X untuk col=1
-    ORIGIN_Y    = 200      # Y untuk row=1
-    SPACING_X   = -20      # Pergeseran X setiap kolom bertambah 1  (negatif = menjauhi robot)
-    SPACING_Y   = -20      # Pergeseran Y setiap baris bertambah 1
-    Z_DROP      = -35      # Ketinggian drop zone (sama untuk semua)
-    R_DROP      = 100      # Rotasi tool
+def arm_move(device, cam_x, cam_y, color):
+    """
+    Menjalankan urutan pergerakan lengan robot (Pick and Place).
+    """
+    if device is None:
+        print("[ERROR] Dobot tidak terhubung. Mengabaikan perintah gerak.")
+        return
 
-    positions = {}
-    for row in range(1, 5):
-        for col in range(1, 5):
-            x = ORIGIN_X + (col - 1) * SPACING_X
-            y = ORIGIN_Y + (row - 1) * SPACING_Y
-            positions[(col, row)] = CustomPosition(x, y, Z_DROP, R_DROP)
-    return positions
+    # 1. Terjemahkan koordinat
+    target_x, target_y = coordinate_translate(cam_x, cam_y)
+    print(f"[ARM] Menerima tugas: Objek {color} di Kam({cam_x}, {cam_y}) -> Dobot({target_x}, {target_y})")
 
-# Build sekali saat modul diload
-_GRID_POS = _grid_positions()
+    # 2. Bergerak ke atas objek (Hover)
+    # Gunakan wait=True agar program Python menunggu sampai robot selesai bergerak secara fisik
+    print("[ARM] Bergerak ke titik aman di atas objek...")
+    device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
 
+    # 3. Turun dan ambil objek
+    print("[ARmM] Turun mengabil objek...")
+    device.move_to(target_x, target_y, Z_PICK, HOME_R, wait=True)
+    
+    # Nyalakan pompa hisap (Suction Cup) - Sesuaikan jika Anda pakai Gripper
+    device.suck(True)
+    time.sleep(0.5) # Beri jeda agar hisapan vakum menguat sebelum ditarik
 
-def get_dropzone(col: int, row: int) -> CustomPosition:
-    """Kembalikan CustomPosition untuk sel grid (col, row), 1-indexed."""
-    if (col, row) not in _GRID_POS:
-        raise ValueError(f"Posisi grid ({col},{row}) tidak valid. Gunakan 1–4.")
-    return _GRID_POS[(col, row)]
+    # 4. Naik kembali ke posisi Hover (membawa objek)
+    device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
 
-def ke_posisi_awal(device: Dobot):
-    pos = get_posisi_awal()
-    device.move_to(pos.x, pos.y, pos.z, pos.r, wait=True)
+    # 5. Tentukan lokasi pembuangan (Drop-off) berdasarkan warna
+    # (Silakan ubah koordinat X, Y pembuangan sesuai fisik di lapangan)
+    if color == "Merah":
+        drop_x, drop_y = 150, 150
+    elif color == "Biru":
+        drop_x, drop_y = 150, -150
+    elif color == "Hijau":
+        drop_x, drop_y = 100, 150
+    else:
+        drop_x, drop_y = 200, 100 # Default/Kuning
 
+    # 6. Bergerak ke keranjang warna dan jatuhkan
+    print(f"[ARM] Menaruh objek {color} ke area pembuangan...")
+    device.move_to(drop_x, drop_y, Z_HOVER, HOME_R, wait=True)
+    device.move_to(drop_x, drop_y, Z_PICK, HOME_R, wait=True)
+    
+    # Matikan hisapan
+    device.suck(False)
+    time.sleep(0.5) # Beri waktu agar objek benar-benar terlepas
+    
+    # Naik lagi ke posisi aman
+    device.move_to(drop_x, drop_y, Z_HOVER, HOME_R, wait=True)
 
-def ke_posisi_kamera(device: Dobot):
-    pos = get_posisi_kamera()
-    device.move_to(pos.x, pos.y, pos.z, pos.r, wait=True)
-
-
-def pick_payload(device: Dobot, position: CustomPosition):
-    print("[PICK] Mengambil payload...")
-    ke_posisi_kamera(device)
-    sleep(1)
-    device.move_to(position.x, position.y, DOBOT_Z_PICK, position.r, wait=True)
-    sleep(1)
-    device.suck(True)   # GRIP ON
-    sleep(1)
-    ke_posisi_awal(device)
-    sleep(1)
-
-
-def place_payload(device: Dobot, position: CustomPosition):
-    print("[PLACE] Meletakkan payload...")
-    ke_posisi_kamera(device)
-    sleep(1)
-    ke_posisi_awal(device)
-    sleep(1)
-    device.move_to(position.x, position.y, position.z, position.r, wait=True)
-    sleep(1)
-    device.move_to(position.x, position.y, DOBOT_Z_PLACE, position.r, wait=True)
-    sleep(1)
-    device.suck(False)    # GRIP OFF
-    sleep(1)
-    ke_posisi_awal(device)
-    sleep(1)
-
-def jalankan_posisi(device: Dobot, col: int, row: int):
-    target = get_dropzone(col, row)
-    label  = chr(ord('A') + (row - 1) * 4 + (col - 1))
-    print(f"[POSISI {label}] Grid ({col},{row}) → X:{target.x} Y:{target.y} Z:{target.z}")
-
-    pick_payload(device, get_posisi_kamera())
-    place_payload(device, target)
-    ke_posisi_awal(device)
-    print(f"[POSISI {label}] Selesai.")
-
-def build_posisi_map():
-    return {
-        (col, row): (lambda dev, c=col, r=row: jalankan_posisi(dev, c, r))
-        for row in range(1, 5)
-        for col in range(1, 5)
-    }
+    # 7. Kembali ke posisi standby (Home)
+    print("[ARM] Selesai. Kembali ke Home.")
+    device.move_to(HOME_X, HOME_Y, HOME_Z, HOME_R, wait=True)

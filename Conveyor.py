@@ -5,7 +5,7 @@ CONVEYOR_SPEED = 0.75
 CONVEYOR_DELAY = 1.16
 
 def init_dobot():
-    """Mencari port dan menghubungkan ke Dobot."""
+    # Mencari port dan menghubungkan ke Dobot.
     available_ports = list_ports.comports()
     if not available_ports:
         print("[ERROR] Tidak ada port serial yang ditemukan.")
