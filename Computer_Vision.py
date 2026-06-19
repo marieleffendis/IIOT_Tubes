@@ -14,11 +14,6 @@ def conveyor(state):
     elif state == 1:
         start_conveyor()
         #print("[AKSI] Conveyor on")
-        print("[AKSI] Conveyor off")
-        # stop_conveyor()
-    elif state == 1:
-        # start_conveyor()
-        print("[AKSI] Conveyor on")
 
 def arm_works(cx, cy, color):
     # Fungsi ini akan dipanggil setelah conveyor mati
