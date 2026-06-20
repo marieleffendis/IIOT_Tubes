@@ -1,6 +1,7 @@
 const http = require("http");
 const mqtt = require('mqtt');
 const fs = require("fs");
+const readline = require("readline");
 const host = 'localhost';
 const port = 8000;
 
@@ -22,6 +23,7 @@ client.on('connect', () => {
     client.subscribe(wildcardTopic, (err) => {
         if (!err) {
             console.log(`Menunggu seluruh data di jalur: \n- ${wildcardTopic.join('\n- ')}`);
+            console.log('\nKetik salah satu untuk memanggil data: camera | color | dobot | conveyor | system | mode\n');
         } else {
             console.error('Gagal subscribe:', err);
         }
@@ -29,55 +31,48 @@ client.on('connect', () => {
 });
 
 client.on('message', (topic, message) => {
-    const perintah = message.toString().trim().toUpperCase();
-    console.log(`[PERINTAH MASUK] Topik: ${topic} | Pesan: ${perintah}`);
+    const raw = message.toString().trim();
+    console.log(`[DATA MASUK] Topik: ${topic} | Pesan: ${raw}`);
+
+    // Payload Telemetry/State dikirim Python dalam bentuk JSON
+    let data;
+    try {
+        data = JSON.parse(raw);
+    } catch (e) {
+        data = raw; // bukan JSON (mis. "idle", "auto")
+    }
 
     switch (topic) {
-        
+
         case 'IIoT/Labtek_VI/Lab_TF_C/docon_01/Telemetry/camera':
-            if (perintah === 'CAMERA') {
-                let camera = 60;
-                console.log(`FPS camera : ${camera}`);
-            } 
+            let camera = data.fps;
+            console.log(`FPS camera : ${camera}`);
             break;
 
         case 'IIoT/Labtek_VI/Lab_TF_C/docon_01/Telemetry/color':
-            if (perintah === 'COLOR') {
-                let color = 'merah';
-                console.log(`Warna : ${color}`);
-            }
+            let color = data.color;
+            console.log(`Warna : ${color} (x:${data.x}, y:${data.y})`);
             break;
 
         case 'IIoT/Labtek_VI/Lab_TF_C/docon_01/Telemetry/dobot':
-            if (perintah === 'DOBOT') {
-                let x = 20;
-                let y = 10;
-                console.log(`Posisi Dobot : x:${x} y:${y}`);
-            } 
+            let x = data.x;
+            let y = data.y;
+            console.log(`Posisi Dobot : x:${x} y:${y}`);
             break;
 
         case 'IIoT/Labtek_VI/Lab_TF_C/docon_01/Telemetry/conveyor':
-            if (perintah === 'CONVEYOR') {
-                let speed = 15;
-                console.log(`Conveyor speed : ${speed}`);
-            } 
+            let speed = data.running;
+            console.log(`Conveyor speed : ${speed}`);
             break;
 
         case 'IIoT/Labtek_VI/Lab_TF_C/docon_01/State/system':
-            let system = "idle";
-            if (perintah === 'IDLE') {
-                console.log(`Kondisi sistem : ${system}`);
-            } 
+            let system = data;
+            console.log(`Kondisi sistem : ${system}`);
             break;
-        
+
         case 'IIoT/Labtek_VI/Lab_TF_C/docon_01/State/mode':
-            if (perintah === 'MANUAL') {
-                let mode = "manual";
-                console.log(`Mode sistem : ${mode}`);
-            } else if (perintah === "AUTO") {
-                let mode = "auto";
-                console.log(`Mode sistem : ${mode}`);
-            }
+            let mode = data;
+            console.log(`Mode sistem : ${mode}`);
             break;
 
         default:
@@ -87,4 +82,36 @@ client.on('message', (topic, message) => {
 
 client.on('error', (err) => {
     console.error('Koneksi error:', err);
+});
+
+// Ketik nama data di terminal untuk "memanggil" topik tersebut.
+// Ini publish ke Command/<nama>, lalu Python akan balas sekali ke Telemetry/State terkait,
+// dan baru ditampilkan lewat client.on('message') di atas.
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+rl.on('line', (line) => {
+    const perintah = line.toString().trim().toLowerCase();
+
+    switch (perintah) {
+        case 'camera':
+            client.publish('IIoT/Labtek_VI/Lab_TF_C/docon_01/Command/camera', 'GET');
+            break;
+        case 'color':
+            client.publish('IIoT/Labtek_VI/Lab_TF_C/docon_01/Command/color', 'GET');
+            break;
+        case 'dobot':
+            client.publish('IIoT/Labtek_VI/Lab_TF_C/docon_01/Command/dobot', 'GET');
+            break;
+        case 'conveyor':
+            client.publish('IIoT/Labtek_VI/Lab_TF_C/docon_01/Command/conveyor', 'GET');
+            break;
+        case 'system':
+            client.publish('IIoT/Labtek_VI/Lab_TF_C/docon_01/Command/system', 'GET');
+            break;
+        case 'mode':
+            client.publish('IIoT/Labtek_VI/Lab_TF_C/docon_01/Command/mode', 'GET');
+            break;
+        default:
+            console.log(`Perintah tidak dikenal: ${perintah}`);
+    }
 });

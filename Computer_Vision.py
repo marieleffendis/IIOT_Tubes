@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import time
+import json
+import paho.mqtt.client as mqtt
 from pydobotplus import Dobot
 from Conveyor import start_conveyor, stop_conveyor, device 
 from Arm import arm_move
@@ -10,6 +12,51 @@ cap = cv2.VideoCapture(0) # Sesuaikan indeks kamera
 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 cap.set(cv2.CAP_PROP_FPS, 30)
 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+# =========================================================
+#                    KONFIGURASI MQTT
+# =========================================================
+BASE_TOPIC = "IIoT/Labtek_VI/Lab_TF_C/docon_01"
+
+# State terbaru, diupdate terus di dalam loop, TAPI hanya dipublish saat ada
+# permintaan masuk lewat topik Command/* (dipanggil dari mqtt_server.js)
+latest_fps = 0
+latest_color = None
+latest_x = None
+latest_y = None
+system_state = "idle"
+system_mode = "auto"
+
+def on_connect(mqttc, userdata, flags, rc):
+    print("[MQTT] Terhubung ke broker.")
+    mqttc.subscribe(f"{BASE_TOPIC}/Command/#")
+
+def on_message(mqttc, userdata, msg):
+    print(f"[MQTT] Dipanggil: {msg.topic}")
+
+    if msg.topic == f"{BASE_TOPIC}/Command/camera":
+        mqttc.publish(f"{BASE_TOPIC}/Telemetry/camera", json.dumps({"fps": latest_fps}))
+
+    elif msg.topic == f"{BASE_TOPIC}/Command/color":
+        mqttc.publish(f"{BASE_TOPIC}/Telemetry/color", json.dumps({"color": latest_color, "x": latest_x, "y": latest_y}))
+
+    elif msg.topic == f"{BASE_TOPIC}/Command/dobot":
+        mqttc.publish(f"{BASE_TOPIC}/Telemetry/dobot", json.dumps({"x": latest_x, "y": latest_y}))
+
+    elif msg.topic == f"{BASE_TOPIC}/Command/conveyor":
+        mqttc.publish(f"{BASE_TOPIC}/Telemetry/conveyor", json.dumps({"running": conveyor_running}))
+
+    elif msg.topic == f"{BASE_TOPIC}/Command/system":
+        mqttc.publish(f"{BASE_TOPIC}/State/system", system_state)
+
+    elif msg.topic == f"{BASE_TOPIC}/Command/mode":
+        mqttc.publish(f"{BASE_TOPIC}/State/mode", system_mode)
+
+mqttc = mqtt.Client()
+mqttc.on_connect = on_connect
+mqttc.on_message = on_message
+mqttc.connect("localhost", 1883, 60)
+mqttc.loop_start()
 
 # Inisialisasi status conveyor di LUAR loop agar tidak terus-menerus di-reset
 conveyor_running = True
@@ -30,11 +77,19 @@ color_ranges = {
 # Sesuaikan angka ini dengan posisi fisik conveyor Anda di kamera
 ROI_X, ROI_Y, ROI_W, ROI_H = 325, 100, 140, 280
 
+prev_frame_time = time.time()
+
 while True:
     ret, frame = cap.read()
     if not ret:
         print("Gagal membaca dari kamera.")
         break
+
+    # Update FPS terbaru (disimpan saja, dipublish hanya saat diminta)
+    now = time.time()
+    dt = now - prev_frame_time
+    prev_frame_time = now
+    latest_fps = round(1.0 / dt, 2) if dt > 0 else 0
 
     # 1. Gambar kotak ROI di layar (sebagai panduan visual)
     cv2.rectangle(frame, (ROI_X, ROI_Y), (ROI_X + ROI_W, ROI_Y + ROI_H), (255, 0, 0), 2)
@@ -75,6 +130,12 @@ while True:
                     # 5. Konversi ke titik tengah GLOBAL (relatif terhadap frame utama)
                     cX_global = cX_roi + ROI_X
                     cY_global = cY_roi + ROI_Y
+
+                    # Update state terbaru (dipublish nanti hanya kalau diminta)
+                    system_state = "busy"
+                    latest_color = color_name
+                    latest_x = cX_global
+                    latest_y = cY_global
                     
                     # Matikan conveyor
                     if conveyor_running:
@@ -101,6 +162,7 @@ while True:
                     # Nyalakan kembali setelah selesai
                     conveyor_running = True
                     start_conveyor()
+                    system_state = "idle"
                     object_processed = True
 
                     for _ in range(5):
@@ -114,6 +176,9 @@ while True:
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
+mqttc.loop_stop()
+mqttc.disconnect()
 
 cap.release()
 device.close()
