@@ -590,7 +590,6 @@ class SmartSortPage(tk.Frame):
             messagebox.showinfo("Misi Sukses", "Proses Auto-Sort berhasil! Lengan robot telah selesai mengurutkan balok.")
         else:
             self.lbl_info.configure(text="❌ Proses gagal. Silakan periksa log terminal.", fg=COLOR_DANGER)
-# ============================================================
 # MAIN
 # ============================================================
 if __name__ == "__main__":

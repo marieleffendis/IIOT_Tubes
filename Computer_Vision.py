@@ -1,8 +1,12 @@
 import cv2
 import numpy as np
+import time
 import sys
 import argparse
-from Actuator import start_conveyor, stop_conveyor, arm_move, init_dobot
+from pydobotplus import Dobot
+from Conveyor import start_conveyor, stop_conveyor, device 
+from Arm import arm_move
+import Conveyor
 from serial.tools import list_ports
 
 # Menangkap baris dan kolom yang dikirim oleh HMI.py
@@ -10,25 +14,33 @@ parser =  argparse.ArgumentParser()
 parser.add_argument('--manual', nargs=2, help='Format: --manual col row')
 args = parser.parse_args()
 
-if args.manual:
-    target_col = int(args.manual[0])
-    target_row = int(args.manual[1])
-    print(f"[VISION] Memulai misi drop-off ke Grid Manual: Kolom {target_col}, Baris {target_row}")
+if args.manual: 
+	target_col = int(args.manual[0])
+	target_row = int(args.manual[1])
+	print(f"[VISION] Memulai misi drop-off ke Grid Manual: Kolom {target_col}, Baris {target_row}")
+else: 
+	print("[ERROR] Tidal ada argumen koordinat grid dari HMI. Program dihentikan.")
+	sys.exit()
+
+available_ports = list(list_ports.comports())
+
+if not available_ports:
+    sys.exit(1)
+
+if len(available_ports) > 1:
+    port = available_ports[1].device
 else:
-    print("[ERROR] Tidak ada argumen koordinat grid dari HMI. Program dihentikan.")
-    sys.exit()
+    port = available_port[0].device
+    
+print(f"[VISION] Menghubungkan langsung ke port {port} (Tanpa Homing) ...")
+device = Dobot(port=port)
 
-print("[VISION] Menghubungkan ke Dobot...")
-init_dobot()
+Conveyor.device = device
 
-cap = cv2.VideoCapture(0) # Sesuaikan indeks kamera jika perlu
-
+cap = cv2.VideoCapture(0) # Sesuaikan indeks kamera
 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 cap.set(cv2.CAP_PROP_FPS, 30)
 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
 # Inisialisasi status conveyor di LUAR loop agar tidak terus-menerus di-reset
 conveyor_running = True
@@ -45,10 +57,10 @@ color_ranges = {
     "Biru": [(np.array([100, 150, 0]), np.array([140, 255, 255]))]
 }
 
-# Definisi kotak awal (Tetap di layar)
+# --- DEFINISI KOTAK ROI (Tetap di layar) ---
 # Format: X_awal, Y_awal, Lebar, Tinggi
 # Sesuaikan angka ini dengan posisi fisik conveyor Anda di kamera
-ROI_X, ROI_Y, ROI_W, ROI_H = 215, 100, 140, 280
+ROI_X, ROI_Y, ROI_W, ROI_H = 325, 100, 140, 280
 
 print("[VISION] Mencari benda di arena ROI...")
 
@@ -61,7 +73,7 @@ while not object_found:
     # 1. Gambar kotak ROI di layar (sebagai panduan visual)
     cv2.rectangle(frame, (ROI_X, ROI_Y), (ROI_X + ROI_W, ROI_Y + ROI_H), (255, 0, 0), 2)
     cv2.putText(frame, "Area Deteksi (ROI)", (ROI_X, ROI_Y - 10), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
     # 2. Potong frame hanya pada area ROI
     roi_frame = frame[ROI_Y:ROI_Y + ROI_H, ROI_X:ROI_X + ROI_W]
@@ -114,9 +126,9 @@ while not object_found:
 
                     # Panggil fungsi lengan robot dengan koordinat GLOBAL
                     print(f"[AKSI] Robotic arm bergerak ke ({cX_global}, {cY_global}) untuk mengambil objek {color_name}")
-                    arm_move(cX_global, cY_global, color_name, target_col, target_row)
+                    arm_move(device, cX_global, cY_global, color_name, target_col, target_row)
                     print(f"[AKSI] Selesai mengambil {color_name}.")
-           
+                                     
                     break 
 
     # Update tampilan jika tidak ada objek yang diproses di iterasi ini
