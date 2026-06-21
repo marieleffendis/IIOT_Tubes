@@ -30,7 +30,7 @@ if not available_ports:
 if len(available_ports) > 1:
     port = available_ports[1].device
 else:
-    port = available_port[0].device
+    port = available_ports[0].device
     
 print(f"[VISION] Menghubungkan langsung ke port {port} (Tanpa Homing) ...")
 device = Dobot(port=port)
