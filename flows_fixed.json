@@ -275,7 +275,7 @@
     "y": 880,
     "wires": [
       [
-        "e64134f108a560db"
+        "ff001122334455aa"
       ]
     ]
   },
@@ -752,5 +752,21 @@
     "x": 760,
     "y": 960,
     "wires": []
+  },
+  {
+    "id": "ff001122334455aa",
+    "type": "json",
+    "z": "fd6dea6de6732618",
+    "name": "Stringify target",
+    "property": "payload",
+    "action": "str",
+    "pretty": false,
+    "x": 520,
+    "y": 880,
+    "wires": [
+      [
+        "e64134f108a560db"
+      ]
+    ]
   }
 ]
