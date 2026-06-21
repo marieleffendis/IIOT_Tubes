@@ -158,15 +158,15 @@ def arm_move(cam_x, cam_y, color, target_col, target_row, angle=0.0):
 
     # 5. Bergerak ke keranjang warna dan jatuhkan
     print(f"[ARM] Menaruh objek {color} ke area pembuangan Grid ({target_col}, {target_row})...")
-    device.move_to(drop_x, drop_y, Z_HOVER, -angle, wait=True)
-    device.move_to(drop_x, drop_y, -45, -angle, wait=True)
+    device.move_to(drop_x, drop_y, Z_HOVER, angle, wait=True)
+    device.move_to(drop_x, drop_y, -45, angle, wait=True)
     
     # Matikan hisapan
     device.suck(False)
     time.sleep(1) # Beri waktu agar objek benar-benar terlepas
     
     # Naik lagi ke posisi aman
-    device.move_to(drop_x, drop_y, Z_HOVER, -angle, wait=True)
+    device.move_to(drop_x, drop_y, Z_HOVER, angle, wait=True)
 
     # 7. Kembali ke posisi standby (Home)
     print("[ARM] Selesai. Kembali ke Home.")
