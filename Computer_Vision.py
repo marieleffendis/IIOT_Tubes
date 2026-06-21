@@ -51,10 +51,6 @@ def build_mask(hsv, ranges):
 
 
 def detect_largest_object(hsv, ranges, min_area=MIN_CONTOUR_AREA):
-    """
-    Cari objek (kontur) terbesar pada mask warna tertentu di dalam ROI.
-    Mengembalikan (cX_roi, cY_roi, x, y, w, h) jika valid, None jika tidak ditemukan.
-    """
     mask = build_mask(hsv, ranges)
     contours, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
@@ -70,13 +66,40 @@ def detect_largest_object(hsv, ranges, min_area=MIN_CONTOUR_AREA):
 
     cX = int(M["m10"] / M["m00"])
     cY = int(M["m01"] / M["m00"])
-    x, y, w, h = cv2.boundingRect(c)
-    return cX, cY, x, y, w, h
+    
+    # 1. Dapatkan rectangle dengan orientasi sudut
+    rect = cv2.minAreaRect(c)
+    
+    # 2. Ekstrak 4 titik sudut dari rect untuk keperluan visualisasi (box)
+    box = cv2.boxPoints(rect)
+    box = np.int0(box) 
+    
+    # 3. Ekstrak sudut mentah dari OpenCV
+    angle = rect[2]
 
-def draw_detection(frame, x, y, w, h, cX, cY, label):
-    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    # 4. Normalisasi Sudut untuk Persegi
+    # Karena objek dipastikan persegi, rotasi 90 derajat menghasilkan wujud yang identik.
+    # Stabilkan sudut menggunakan modulo agar selalu berada di rentang [0, 90).
+    normalized_angle = angle % 90
+    
+    # Opsional: Geser rentang menjadi [-45, 45] untuk meminimalkan jarak putar 
+    # motor servo pada end-effector (Dobot).
+    if normalized_angle > 45:
+        normalized_angle -= 90
+
+    return cX, cY, box, normalized_angle
+
+def draw_detection(frame, box, cX, cY, label, angle):
+    # Menggambar kotak pembatas yang mengikuti kemiringan objek
+    cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)
+    
+    # Menandai titik tengah
     cv2.circle(frame, (cX, cY), 5, (255, 255, 255), -1)
-    cv2.putText(frame, label, (cX - 30, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    
+    # Menampilkan label dan sudut
+    info_text = f"{label} | A: {angle:.1f} deg"
+    cv2.putText(frame, info_text, (cX - 40, cY - 20), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
 def cleanup(cap):
     # Membersihkan koneksi peripheral, kamera, dan mengamankan conveyor belt."""

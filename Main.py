@@ -75,21 +75,20 @@ def run_manual(target_col, target_row):
                 if hasil is None:
                     continue
 
-                cX, cY, x, y, w, h = hasil
+                cX, cY, box, angle = hasil
 
                 if not is_inside_roi(cX, cY):
                     continue   # objek terdeteksi & dilacak, tapi belum masuk ROI -> jangan ganggu conveyor/arm
 
                 stop_conveyor()
                 object_found = True   # (atau object_detected_in_this_frame = True di run_auto)
-                object_found = True
 
-                draw_detection(frame, x, y, w, h, cX, cY, f"{color_name} Center")
+                draw_detection(frame, box, cX, cY, f"{color_name} Center", angle)
                 cv2.imshow("Camera Feed", frame)
                 cv2.waitKey(1)
 
                 print(f"[AKSI] Robotic arm bergerak ke ({cX}, {cY}) untuk mengambil objek {color_name}")
-                arm_move(cX, cY, color_name, target_col, target_row)
+                arm_move(cX, cY, color_name, target_col, target_row, angle)
                 print(f"[AKSI] Selesai mengambil {color_name}.")
                 break
 
@@ -150,24 +149,21 @@ def run_auto(misi_aktif):
                 if hasil is None:
                     continue
 
-                cX_roi, cY_roi, x, y, w, h = hasil
-                cX_global = cX_roi + ROI_X
-                cY_global = cY_roi + ROI_Y
+                cX, cY, box, angle = hasil
 
                 stop_conveyor()
                 object_detected_in_this_frame = True
 
                 target_col, target_row = misi_aktif[color_name].pop(0)
 
-                draw_detection(frame, x, y, w, h, cX_global, cY_global,
-                                f"TARGET: {color_name} -> Grid ({target_col},{target_row})")
+                draw_detection(frame, box, cX, cY, f"{color_name} Center", angle)
                 cv2.imshow("Camera Feed - Auto Mode", frame)
                 cv2.waitKey(1)
 
                 print(f"\n[SORT] Menemukan objek warna {color_name}!")
-                print(f"[AKSI] Mengambil koordinat global ({cX_global}, {cY_global}) -> Menaruh ke Grid ({target_col}, {target_row})")
+                print(f"[AKSI] Mengambil koordinat global ({cX}, {cY}) -> Menaruh ke Grid ({target_col}, {target_row})")
 
-                arm_move(cX_global, cY_global, color_name, target_col, target_row)
+                arm_move(cX, cY, color_name, target_col, target_row, angle)
 
                 misi_selesai += 1
                 print(f"[STATUS] Progress penataan: {misi_selesai}/{total_misi} selesai.\n")
