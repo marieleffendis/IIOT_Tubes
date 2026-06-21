@@ -74,7 +74,7 @@ def main():
     }
 
     # Definisi ROI (Disamakan persis dengan Manual.py)
-    ROI_X, ROI_Y, ROI_W, ROI_H = 325, 100, 140, 280
+    ROI_X, ROI_Y, ROI_W, ROI_H = 215, 100, 140, 280
     misi_selesai = 0
 
     print("[VISION] Menjalankan conveyor & memulai pemindaian area ROI...")
