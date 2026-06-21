@@ -11,6 +11,7 @@ from Computer_Vision import (
     detect_largest_object,
     draw_detection,
     is_inside_roi,
+    is_inside_pick_zone,
     COLOR_RANGES,
 )
 
@@ -106,8 +107,7 @@ def flush_camera_buffer(cap, frames=5):
 def scan_detections(hsv, allowed_colors=None):
     """
     Scan semua warna dan kembalikan list deteksi:
-    [(warna, cX, cY, box, angle, inside_roi), ...]
-    Jika allowed_colors diberikan, hanya warna tersebut yang diproses.
+    [(warna, cX, cY, box, angle, inside_roi, inside_pick_zone), ...]
     """
     detections = []
 
@@ -120,18 +120,20 @@ def scan_detections(hsv, allowed_colors=None):
             continue
 
         cX, cY, box, angle = hasil
-        inside = is_inside_roi(cX, cY)
-        detections.append((color_name, cX, cY, box, angle, inside))
+        inside_roi = is_inside_roi(cX, cY)
+        inside_pick = is_inside_pick_zone(cX, cY)
+
+        detections.append((color_name, cX, cY, box, angle, inside_roi, inside_pick))
 
     return detections
 
 
-def choose_inside_roi_candidate(detections):
+def choose_inside_pick_zone_candidate(detections):
     """
-    Ambil kandidat pertama yang sudah berada di ROI.
+    Ambil kandidat pertama yang sudah cukup dalam di ROI.
     """
     for det in detections:
-        if det[5]:  # inside_roi
+        if det[6]:  # inside_pick_zone
             return det
     return None
 
@@ -164,11 +166,16 @@ def run_manual(target_col, target_row):
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
             detections = scan_detections(hsv)
-            candidate = choose_inside_roi_candidate(detections)
+            candidate = choose_inside_pick_zone_candidate(detections)
 
             # Tampilkan semua deteksi yang ditemukan
-            for color_name, cX, cY, box, angle, inside in detections:
-                label = f"{color_name} (INSIDE ROI)" if inside else f"{color_name} (Outside ROI)"
+            for color_name, cX, cY, box, angle, inside_roi, inside_pick in detections:
+                if inside_pick:
+                    label = f"{color_name} (PICK ZONE)"
+                elif inside_roi:
+                    label = f"{color_name} (INSIDE ROI)"
+                else:
+                    label = f"{color_name} (Outside ROI)"
                 draw_detection(frame, box, cX, cY, label, angle)
 
             # Stabilitas kandidat
@@ -260,11 +267,16 @@ def run_auto(misi_aktif):
 
             allowed_colors = {warna for warna, daftar in misi_aktif.items() if len(daftar) > 0}
             detections = scan_detections(hsv, allowed_colors=allowed_colors)
-            candidate = choose_inside_roi_candidate(detections)
+            candidate = choose_inside_pick_zone_candidate(detections)
 
             # Tampilkan semua deteksi
-            for color_name, cX, cY, box, angle, inside in detections:
-                label = f"{color_name} (INSIDE ROI)" if inside else f"{color_name} (Outside ROI)"
+            for color_name, cX, cY, box, angle, inside_roi, inside_pick in detections:
+                if inside_pick:
+                    label = f"{color_name} (PICK ZONE)"
+                elif inside_roi:
+                    label = f"{color_name} (INSIDE ROI)"
+                else:
+                    label = f"{color_name} (Outside ROI)"
                 draw_detection(frame, box, cX, cY, label, angle)
 
             # Kandidat valid harus stabil beberapa frame

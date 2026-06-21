@@ -20,6 +20,15 @@ def is_inside_roi(cX, cY):
     """True jika titik (koordinat global) berada di dalam batas ROI."""
     return ROI_X <= cX <= ROI_X + ROI_W and ROI_Y <= cY <= ROI_Y + ROI_H
 
+PICK_MARGIN_X = 5
+PICK_MARGIN_Y = 30  # makin besar = makin "dalam" sebelum arm aktif
+
+def is_inside_pick_zone(cX, cY):
+    return (
+        ROI_X + PICK_MARGIN_X <= cX <= ROI_X + ROI_W - PICK_MARGIN_X and
+        ROI_Y + PICK_MARGIN_Y <= cY <= ROI_Y + ROI_H - PICK_MARGIN_Y
+    )
+
 def setup_camera(fps=30, width=640, height=480):
     """Inisialisasi VideoCapture dengan parameter standar yang dipakai kedua mode."""
     cap = cv2.VideoCapture(0)  # Sesuaikan indeks kamera Anda (0, 1, atau 2)
