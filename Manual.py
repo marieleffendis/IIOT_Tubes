@@ -28,11 +28,6 @@ else:
 print("[VISION] Menghubungkan ke Dobot...")
 init_dobot()
 
-cap = cv2.VideoCapture(0) # Sesuaikan indeks kamera
-cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
-cap.set(cv2.CAP_PROP_FPS, 24)
-cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
 # Inisialisasi status conveyor di LUAR loop agar tidak terus-menerus di-reset
 conveyor_running = True
 start_conveyor() 
@@ -64,7 +59,7 @@ while not object_found:
     # 1. Gambar kotak ROI di layar (sebagai panduan visual)
     cv2.rectangle(frame, (ROI_X, ROI_Y), (ROI_X + ROI_W, ROI_Y + ROI_H), (255, 0, 0), 2)
     cv2.putText(frame, "Area Deteksi (ROI)", (ROI_X, ROI_Y - 10), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
     # 2. Potong frame hanya pada area ROI
     roi_frame = frame[ROI_Y:ROI_Y + ROI_H, ROI_X:ROI_X + ROI_W]
