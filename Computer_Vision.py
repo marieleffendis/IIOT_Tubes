@@ -60,7 +60,7 @@ color_ranges = {
 # --- DEFINISI KOTAK ROI (Tetap di layar) ---
 # Format: X_awal, Y_awal, Lebar, Tinggi
 # Sesuaikan angka ini dengan posisi fisik conveyor Anda di kamera
-ROI_X, ROI_Y, ROI_W, ROI_H = 325, 100, 140, 280
+ROI_X, ROI_Y, ROI_W, ROI_H = 215, 100, 140, 280
 
 print("[VISION] Mencari benda di arena ROI...")
 
