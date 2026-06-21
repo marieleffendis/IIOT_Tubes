@@ -5,7 +5,7 @@ import cv2
 # --- KONFIGURASI KOORDINAT DOBOT ---
 # Sesuaikan nilai Z ini dengan kondisi fisik meja/conveyor Anda
 Z_HOVER = 50   # Ketinggian aman (melayang di atas conveyor) agar tidak menabrak benda lain
-Z_PICK = -10   # Ketinggian saat menempel pada objek (menyentuh conveyor)
+Z_PICK = -12   # Ketinggian saat menempel pada objek (menyentuh conveyor)
 HOME_R = 0     # Rotasi default end-effector
 
 # Titik istirahat robot (Home)
@@ -47,13 +47,26 @@ def coordinate_transform(cam_x, cam_y):
     
     return round(dobot_x, 2), round(dobot_y, 2)
 
-def arm_move(device, cam_x, cam_y, color):
+def arm_move(device, cam_x, cam_y, color, target_col, target_row):
     """
     Menjalankan urutan pergerakan lengan robot (Pick and Place).
     """
     if device is None:
         print("[ERROR] Dobot tidak terhubung. Mengabaikan perintah gerak.")
         return
+    
+    grid_coordinates = {
+        1: {1: (-18, 198), 2: (6.33, 198), 3: (30.67, 198), 4: (55, 198)},
+        2: {1: (-18, 233.67), 2: (6.33, 233.67), 3: (30.67, 233.67), 4: (55, 233.67)},
+        3: {1: (-18, 249.33), 2: (6.33, 249.33), 3: (30.67, 249.33), 4: (55, 249.33)},
+        4: {1: (-18, 275), 2: (6.33, 275), 3: (30.67, 275), 4: (55, 275)},
+    }   
+
+    try: 
+        drop_x, drop_y = grid_coordinates[target_col][target_row]
+        print(f"[ARM] Menghitung target penempatan fisik: Grid({target_col},{target_row}) -> Dobto X:{drop_x}, Y:{drop_y}")
+    except KeyError: 
+        print("[PERINGATAN] Koordinat grid salah! Menggunakan koordinat default.")
 
     # 1. Terjemahkan koordinat
     target_x, target_y = coordinate_transform(cam_x, cam_y)
@@ -70,25 +83,13 @@ def arm_move(device, cam_x, cam_y, color):
     
     # Nyalakan pompa hisap (Suction Cup) - Sesuaikan jika Anda pakai Gripper
     device.suck(True)
-    time.sleep(0.5) # Beri jeda agar hisapan vakum menguat sebelum ditarik
+    time.sleep(1) # Beri jeda agar hisapan vakum menguat sebelum ditarik
 
     # 4. Naik kembali ke posisi Hover (membawa objek)
     device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
 
-    # 5. Tentukan lokasi pembuangan (Drop-off) berdasarkan warna
-    # (Silakan ubah koordinat X, Y pembuangan sesuai fisik di lapangan)
-    """if color == "Merah":
-        drop_x, drop_y = 150, 150
-    elif color == "Biru":
-        drop_x, drop_y = 150, -150
-    elif color == "Hijau":
-        drop_x, drop_y = 100, 150
-    else:
-        drop_x, drop_y = 200, 100 # Default/Kuning"""
-    drop_x, drop_y = 20, 233
-
-    # 6. Bergerak ke keranjang warna dan jatuhkan
-    print(f"[ARM] Menaruh objek {color} ke area pembuangan...")
+    # 5. Bergerak ke keranjang warna dan jatuhkan
+    print(f"[ARM] Menaruh objek {color} ke area pembuangan Grid ({target_col}, {target_row})...")
     device.move_to(drop_x, drop_y, Z_HOVER, HOME_R, wait=True)
     device.move_to(drop_x, drop_y, -45, HOME_R, wait=True)
     
