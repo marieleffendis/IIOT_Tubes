@@ -16,6 +16,8 @@ import sys
 import os
 import threading
 
+from IIOT_Tubes.Actuator import init_dobot
+
 # ============================================================
 # STYLE
 # ============================================================
@@ -79,7 +81,16 @@ class DobotIntegratedApp(tk.Tk):
             frame.grid(row=0, column=0, sticky="nsew")
 
         self.show_frame("LoginPage")
-
+    def _initialize_dobot_at_start(self):
+            """Melakukan homing sekali saja saat aplikasi HMI dibuka"""
+            try:
+                self.dobot_device = init_dobot()
+                if self.dobot_device:
+                    self.status_var.set("Status: Dobot Siap — Silakan Login & Pilih Mode")
+                else:
+                    self.status_var.set("Status: ❌ Gagal Terhubung ke Dobot!")
+            except Exception as e:
+                self.status_var.set(f"Status: Error Koneksi ({e})")
     def show_frame(self, page_name):
         self.frames[page_name].tkraise()
     

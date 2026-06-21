@@ -8,19 +8,18 @@ from pydobotplus import Dobot
 device = None
 
 def init_dobot():
-    # Mencari port dan menghubungkan ke Dobot.
+    # Mencari port dan menghubungkan ke Dobot (Logika lama kamu)
     available_ports = list(list_ports.comports())
-
     if not available_ports:
-        sys.exit(1)
+        print("[ERROR] Tidak ada port serial yang ditemukan.")
+        return None
 
     if len(available_ports) > 1:
         port = available_ports[1].device
     else:
         port = available_ports[0].device
-
+        
     print(f"[INFO] Mencoba terhubung ke Dobot di port: {port}...")
-    global device
     try:
         device = Dobot(port=port)
         print("[INFO] Dobot terhubung berhasil.")

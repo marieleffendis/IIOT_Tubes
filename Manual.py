@@ -3,11 +3,23 @@ import numpy as np
 import sys
 import argparse
 from Actuator import start_conveyor, stop_conveyor, arm_move, init_dobot
+from serial.tools import list_ports
 
 # Menangkap baris dan kolom yang dikirim oleh HMI.py
 parser =  argparse.ArgumentParser()
 parser.add_argument('--manual', nargs=2, help='Format: --manual col row')
 args = parser.parse_args()
+
+if args.manual:
+    target_col = int(args.manual[0])
+    target_row = int(args.manual[1])
+    print(f"[VISION] Memulai misi drop-off ke Grid Manual: Kolom {target_col}, Baris {target_row}")
+else:
+    print("[ERROR] Tidak ada argumen koordinat grid dari HMI. Program dihentikan.")
+    sys.exit()
+
+print("[VISION] Menghubungkan ke Dobot...")
+init_dobot()
 
 cap = cv2.VideoCapture(0) # Sesuaikan indeks kamera jika perlu
 
@@ -17,17 +29,6 @@ cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-if args.manual: 
-	target_col = int(args.manual[0])
-	target_row = int(args.manual[1])
-	print(f"[VISION] Memulai misi drop-off ke Grid Manual: Kolom {target_col}, Baris {target_row}")
-else: 
-	print("[ERROR] Tidak ada argumen koordinat grid dari HMI. Program dihentikan.")
-	sys.exit()
-
-print("[VISION] Menghubungkan ke Dobot...")
-init_dobot()
 
 # Inisialisasi status conveyor di LUAR loop agar tidak terus-menerus di-reset
 conveyor_running = True
