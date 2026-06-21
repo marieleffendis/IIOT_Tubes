@@ -72,7 +72,7 @@ def detect_largest_object(hsv, ranges, min_area=MIN_CONTOUR_AREA):
     
     # 2. Ekstrak 4 titik sudut dari rect untuk keperluan visualisasi (box)
     box = cv2.boxPoints(rect)
-    box = np.int0(box) 
+    box = np.intp(box) 
     
     # 3. Ekstrak sudut mentah dari OpenCV
     angle = rect[2]
