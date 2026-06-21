@@ -25,7 +25,7 @@ latest_color = None
 latest_x = None
 latest_y = None
 system_state = "idle"
-system_mode = "auto"
+system_mode = "manual"
 
 def on_connect(mqttc, userdata, flags, rc):
     print("[MQTT] Terhubung ke broker.")
