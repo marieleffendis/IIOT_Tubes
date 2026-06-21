@@ -15,6 +15,7 @@ import subprocess
 import sys
 import os
 import threading
+from Conveyor import init_dobot
 
 # ============================================================
 # STYLE
@@ -67,7 +68,8 @@ class DobotIntegratedApp(tk.Tk):
         self.container.grid_columnconfigure(0, weight=1)
 
         # Status bar
-        self.status_var = tk.StringVar(value="[INFO] Menghubungkan ke Dobot & Homing (Silakan Tunggu)...")
+        self.status_var = tk.StringVar(value="Status: Menghubungkan ke Dobot & Homing (Silakan Tunggu)...")
+        threading.Thread(target=self._initialize_dobot_at_start, daemon=True).start()
         tk.Label(self, textvariable=self.status_var, bd=1, relief=tk.SUNKEN,
                  anchor=tk.W, bg="#dcdcdc", font=FONT_SMALL).pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -83,6 +85,16 @@ class DobotIntegratedApp(tk.Tk):
     def show_frame(self, page_name):
         self.frames[page_name].tkraise()
     
+    #Homing sekali dalam sekali run
+    def _initialize_dobot_at_start(self):
+        try: 
+            self.dobot_device = init_dobot()
+            if self.dobot_device: 
+                self.status_var.set("Status: Dobot Siap - Silakan Login & Pilih Mode")
+            else:
+                self.status_var.set("Status: Gagal Terhubung ke Dobot!")
+        except Exception as e:
+            self.status_var.set(f"Status: Error Koneksi ({e}") 
 
     def confirm_exit(self):
         if messagebox.askokcancel("Keluar", "Tutup aplikasi?"):
@@ -277,7 +289,7 @@ class DirectControlPage(tk.Frame):
         self._selected_row = None
 
     def _on_grid_click(self, col, row):
-        # Tandai tombol yang dipilih.
+        """Tandai tombol yang dipilih."""
         # Reset highlight tombol sebelumnya
         for btn in self.all_buttons:
             if btn not in (self.btn_back, self.btn_execute):
@@ -310,7 +322,7 @@ class DirectControlPage(tk.Frame):
 
     def _run_thread(self, col, row):
         self.controller.run_script_blocking(
-            "Manual.py", ["--manual", str(col), str(row)]
+            "Computer_Vision.py", ["--manual", str(col), str(row)]
         )
         self.after(0, self._unlock_buttons)
 
@@ -332,203 +344,106 @@ class DirectControlPage(tk.Frame):
 
 
 # ============================================================
-# PAGE 4: SMART AUTO-SORT — Interaktif Grid Visual assignment
+# PAGE 4: SMART AUTO-SORT — upload gambar target 4×4
 # ============================================================
 class SmartSortPage(tk.Frame):
     """
-    User memilih warna di panel kiri, lalu mengeklik posisi grid 4x4 di kanan
-    untuk memetakan lokasi penataan balok. Argumen dikirim ke main_auto.py.
+    User memilih gambar PNG yang menggambarkan susunan target 4×4.
+    Program main_auto.py akan membaca gambar tersebut dan menyusun
+    blok dari conveyor ke posisi sesuai gambar secara otomatis.
     """
 
     def __init__(self, parent, controller):
         super().__init__(parent, bg=COLOR_ACCENT)
-        self.controller = controller
+        self.controller         = controller
+        self.selected_image_path = None
 
-        # --- Status Variabel Internal ---
-        self.selected_color = tk.StringVar(value="Merah") # Default warna terpilih pertama
-        self.color_options = ["Merah", "Kuning", "Hijau", "Biru"]
-        
-        # Menyimpan peta hasil assignment: {(col, row): "Warna" atau None}
-        self.grid_assignments = {}
-        # Menyimpan referensi widget tombol grid kanan: {(col, row): widget_button}
-        self.grid_buttons = {}
-
-        # --- Header Atas ---
-        tk.Label(self, text="MODE 2 — SMART AUTO-SORT (GRID ASSIGNMENT)",
-                 font=FONT_HEADER, fg=COLOR_FG, bg=COLOR_ACCENT).pack(pady=10)
+        # --- Header ---
+        tk.Label(self, text="MODE 2 — SMART AUTO-SORT",
+                 font=FONT_HEADER, fg=COLOR_FG, bg=COLOR_ACCENT).pack(pady=15)
         tk.Label(self,
-                 text="Langkah: 1) Pilih warna di kiri. 2) Klik kotak pada grid kanan untuk menaruh. (Klik ulang grid untuk hapus)",
-                 font=FONT_SMALL, fg="#bdc3c7", bg=COLOR_ACCENT).pack(pady=2)
+                 text="Upload gambar PNG papan target 4×4. Robot akan menyusun blok secara otomatis.",
+                 font=FONT_SMALL, fg="#bdc3c7", bg=COLOR_ACCENT).pack()
 
-        # --- Main Workspace Splitter (Kiri & Kanan) ---
-        workspace_frame = tk.Frame(self, bg=COLOR_ACCENT)
-        workspace_frame.pack(pady=15, padx=20, fill=tk.BOTH, expand=True)
+        # --- Upload section ---
+        upload_frame = tk.LabelFrame(self, text=" File Target ", font=FONT_BODY,
+                                     fg=COLOR_FG, bg=COLOR_ACCENT, padx=10, pady=10)
+        upload_frame.pack(pady=20, padx=40, fill=tk.X)
 
-        # --------------------------------------------------------
-        # PANEL KIRI: Pemilih Warna Aktif
-        # --------------------------------------------------------
-        left_panel = tk.LabelFrame(workspace_frame, text=" 1. Pilih Warna Balok ", font=FONT_BODY,
-                                   fg=COLOR_FG, bg=COLOR_ACCENT, padx=15, pady=15)
-        left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(10, 20))
+        self.lbl_file = tk.Label(upload_frame, text="Belum ada file dipilih",
+                                  font=FONT_BODY, fg="#f39c12", bg=COLOR_ACCENT,
+                                  wraplength=600, justify=tk.LEFT)
+        self.lbl_file.pack(side=tk.LEFT, padx=10, expand=True, fill=tk.X)
 
-        self.color_selector_btns = {}
-        for color in self.color_options:
-            # Menggunakan skema warna yang selaras dengan aplikasi
-            btn_bg = GRID_BTN_COLORS.get(color.lower(), "#7f8c8d")
-            text_fg = "white" if color != "Kuning" else "black" # Kuning teks hitam agar kontras
+        tk.Button(upload_frame, text="📂  Pilih File PNG", font=FONT_BTN,
+                  bg="#2980b9", fg="white", command=self._browse_file).pack(side=tk.RIGHT)
 
-            btn = tk.Button(left_panel, text=f"■  {color}", font=FONT_BTN,
-                            bg=btn_bg, fg=text_fg, width=14, height=2, relief=tk.RAISED,
-                            command=lambda c=color: self._set_active_color(c))
-            btn.pack(pady=10)
-            self.color_selector_btns[color] = btn
-
-        # Set highlight awal pada warna default (Merah)
-        self._set_active_color("Merah")
-
-        # --------------------------------------------------------
-        # PANEL KANAN: Grid 4x4 Visual Interaktif
-        # --------------------------------------------------------
-        right_panel = tk.LabelFrame(workspace_frame, text=" 2. Papan Target Penataan 4x4 ", font=FONT_BODY,
-                                    fg=COLOR_FG, bg=COLOR_ACCENT, padx=20, pady=15)
-        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 10))
-
-        # Mengatur berat kolom/baris agar grid fleksibel melebar rata
-        for i in range(5):
-            right_panel.columnconfigure(i, weight=1)
-            right_panel.rowconfigure(i, weight=1)
-
-        # Label Header Kolom (Col 1 - 4)
-        for c in range(1, 5):
-            tk.Label(right_panel, text=f"Col {c}", font=FONT_SMALL, fg="#bdc3c7", bg=COLOR_ACCENT).grid(row=0, column=c, sticky="s")
-
-        # Membuat susunan Tombol Grid 4x4 (Row & Col 1-indexed)
-        for row in range(1, 5):
-            # Label Header Baris (Row 1 - 4)
-            tk.Label(right_panel, text=f"Row {row}", font=FONT_SMALL, fg="#bdc3c7", bg=COLOR_ACCENT).grid(row=row, column=0, sticky="e", padx=(0, 5))
-            
-            for col in range(1, 5):
-                coord = (col, row)
-                self.grid_assignments[coord] = None # Set awal kosong
-
-                # Buat tombol grid default (Kosong, warna abu-abu netral)
-                btn_grid = tk.Button(
-                    right_panel,
-                    text=".", # Default teks titik penunjuk kosong
-                    font=FONT_BTN,
-                    bg="#7f8c8d",
-                    fg="white",
-                    relief=tk.RAISED,
-                    bd=2,
-                    command=lambda c=col, r=row: self._on_grid_cell_click(c, r)
-                )
-                btn_grid.grid(row=row, column=col, padx=4, pady=4, sticky="nsew")
-                self.grid_buttons[coord] = btn_grid
-
-        # --- Control & Status Section (Bawah) ---
-        bottom_frame = tk.Frame(self, bg=COLOR_ACCENT)
-        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 15))
-
-        self.lbl_info = tk.Label(bottom_frame, text="Sistem siap. Silakan petakan susunan warna.", 
-                                  font=FONT_SMALL, fg="#bdc3c7", bg=COLOR_ACCENT)
+        # --- Preview info ---
+        self.lbl_info = tk.Label(self, text="", font=FONT_SMALL,
+                                  fg="#7f8c8d", bg=COLOR_ACCENT)
         self.lbl_info.pack()
 
-        btn_action_frame = tk.Frame(bottom_frame, bg=COLOR_ACCENT)
-        btn_action_frame.pack(pady=5)
+        # --- Tombol aksi ---
+        btn_frame = tk.Frame(self, bg=COLOR_ACCENT)
+        btn_frame.pack(pady=25)
 
-        self.btn_start = tk.Button(btn_action_frame, text="▶  MULAI MISI AUTO-SORT",
+        self.btn_start = tk.Button(btn_frame, text="▶  MULAI MISI AUTO-SORT",
                                    font=FONT_BTN, bg=COLOR_BTN_2, fg="white",
-                                   width=26, height=2, command=self._start_process)
-        self.btn_start.pack(side=tk.LEFT, padx=10)
+                                   width=28, height=2, state=tk.DISABLED,
+                                   command=self._start_process)
+        self.btn_start.pack(pady=8)
 
-        self.btn_back = tk.Button(btn_action_frame, text="Kembali ke Menu",
-                                  font=FONT_BODY, bg="#95a5a6", fg="white", width=16, height=2,
+        self.btn_back = tk.Button(btn_frame, text="Kembali ke Menu",
+                                  font=FONT_BODY, bg="#95a5a6", fg="white",
                                   command=lambda: controller.show_frame("ModeSelectionPage"))
-        self.btn_back.pack(side=tk.LEFT, padx=10)
+        self.btn_back.pack(pady=5)
 
-    def _set_active_color(self, color):
-        """ Mengganti fokus pilihan warna aktif di panel bagian kiri """
-        self.selected_color.set(color)
-        
-        # Reset border semua tombol warna kiri
-        for c, btn in self.color_selector_btns.items():
-            btn.configure(relief=tk.RAISED, bd=2)
-            
-        # Beri efek tertekan dalam (Sunken) dan border tebal pada warna aktif
-        self.color_selector_btns[color].configure(relief=tk.SUNKEN, bd=5)
-
-    def _on_grid_cell_click(self, col, row):
-        """ Menangani klik tombol grid visual kanan """
-        coord = (col, row)
-        current_assigned = self.grid_assignments[coord]
-        active_color = self.selected_color.get()
-
-        # JIKA kotak tersebut sudah berisi warna yang SAMA, lakukan RESET (Hapus penugasan)
-        if current_assigned == active_color:
-            self.grid_assignments[coord] = None
-            self.grid_buttons[coord].configure(text=".", bg="#7f8c8d", fg="white")
-            print(f"[GUI] Reset Grid ({col},{row}) menjadi kosong.")
-        else:
-            # JIKA kosong atau berisi warna lain, overwrite dengan warna aktif sekarang
-            self.grid_assignments[coord] = active_color
-            bg_target = GRID_BTN_COLORS.get(active_color.lower(), "#2c3e50")
-            text_fg = "white" if active_color != "Kuning" else "black"
-            
-            # Ubah teks tombol menampilkan koordinat penugasan (X, Y) sesuai maumu
-            self.grid_buttons[coord].configure(text=f"({col},{row})", bg=bg_target, fg=text_fg)
-            print(f"[GUI] Assign Warna {active_color} ke Grid ({col},{row}).")
+    def _browse_file(self):
+        path = filedialog.askopenfilename(
+            title="Pilih Gambar Target 4×4",
+            filetypes=[("Image files", "*.png *.jpg *.jpeg"), ("All files", "*.*")]
+        )
+        if path:
+            self.selected_image_path = path
+            filename = os.path.basename(path)
+            self.lbl_file.configure(text=filename)
+            self.lbl_info.configure(
+                text=f"Path: {path}",
+                fg="#95a5a6"
+            )
+            self.btn_start.configure(state=tk.NORMAL)
+            print(f"[GUI] File dipilih: {path}")
 
     def _start_process(self):
-        """ Menyusun argument CLI dari grid data untuk dikirim ke main_auto.py """
-        args_to_send = []
-        summary_msg = "Konfirmasi target sorting otomatis:\n"
-        has_assignment = False
-
-        # Kelompokkan penugasan berdasarkan jenis warna balok
-        color_batches = {"merah": [], "kuning": [], "hijau": [], "biru": []}
-
-        for coord, color in self.grid_assignments.items():
-            if color is not None:
-                col, row = coord
-                color_key = color.lower()
-                color_batches[color_key].append(f"{col},{row}")
-                has_assignment = True
-
-        if not has_assignment:
-            messagebox.showwarning("Papan Grid Kosong", "Silakan tentukan minimal satu posisi warna pada papan grid target!")
+        if not self.selected_image_path:
+            messagebox.showwarning("File Belum Dipilih", "Silakan pilih file gambar target terlebih dahulu.")
             return
 
-        # Mengemas argumen dalam format dinamis, misal: --merah 1,1 2,1 --kuning 4,3
-        for color_name, pairs in color_batches.items():
-            if pairs:
-                args_to_send.append(f"--{color_name}")
-                args_to_send.extend(pairs)
-                summary_msg += f"- {color_name.capitalize()}: {', '.join([f'Grid({p})' for p in pairs])}\n"
-
-        if not messagebox.askyesno("Konfirmasi Penataan", f"{summary_msg}\nApakah tata letak di atas sudah sesuai susunan fisik?"):
+        if not messagebox.askyesno("Konfirmasi",
+                                    f"Mulai Auto-Sort dengan target:\n{os.path.basename(self.selected_image_path)}?"):
             return
 
-        # Kunci interaksi GUI saat jalan
         self.btn_start.configure(state=tk.DISABLED, bg="#7f8c8d")
         self.btn_back.configure(state=tk.DISABLED)
-        self.lbl_info.configure(text="⏳ Lengan robot sedang menyusun balok secara otomatis...", fg=COLOR_SELECTED)
+        self.lbl_info.configure(text="⏳ Proses berjalan...", fg=COLOR_SELECTED)
 
-        # Eksekusi script backend di dalam thread agar GUI tidak freeze
-        threading.Thread(target=self._run_thread, args=(args_to_send,), daemon=True).start()
+        threading.Thread(target=self._run_thread, daemon=True).start()
 
-    def _run_thread(self, args):
-        success = self.controller.run_script_blocking("main_auto.py", args)
+    def _run_thread(self):
+        success = self.controller.run_script_blocking(
+            "main_auto.py", ["--image", self.selected_image_path]
+        )
         self.after(0, lambda: self._on_done(success))
 
     def _on_done(self, success):
-        # Buka kembali kunci tombol GUI
         self.btn_start.configure(state=tk.NORMAL, bg=COLOR_BTN_2)
         self.btn_back.configure(state=tk.NORMAL)
         if success:
-            self.lbl_info.configure(text="✅ Penataan selesai.", fg="#27ae60")
-            messagebox.showinfo("Sukses", "Dobot selesai menata seluruh balok sesuai tata letak grid!")
+            self.lbl_info.configure(text="✅ Misi selesai.", fg="#27ae60")
+            messagebox.showinfo("Selesai", "Auto-Sort berhasil diselesaikan!")
         else:
-            self.lbl_info.configure(text="❌ Proses terhenti atau gagal. Cek log konsol terminal.", fg=COLOR_DANGER)
+            self.lbl_info.configure(text="❌ Misi gagal. Lihat log terminal.", fg=COLOR_DANGER)
+
 
 # ============================================================
 # MAIN
