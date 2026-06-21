@@ -27,7 +27,7 @@ def connect_dobot():
 
     # Pilih port pertama secara default.
     # Jika sistem Anda selalu butuh port tertentu, ubah di sini.
-    port = available_ports[0].device
+    port = available_ports[1].device
 
     print(f"[INFO] Mencoba terhubung ke Dobot di port: {port}...")
     try:
