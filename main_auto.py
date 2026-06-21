@@ -42,7 +42,7 @@ def main():
     cap = cv2.VideoCapture(0) # Sesuaikan indeks kamera Anda
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FPS, 24)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) #ya
 
     # Database rentang warna HSV (Disamakan persis dengan Manual.py & Calibration.py)
     color_ranges = {
