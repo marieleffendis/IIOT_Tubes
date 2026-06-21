@@ -3,8 +3,7 @@ import numpy as np
 import sys
 import argparse
 import time
-from Conveyor import start_conveyor, stop_conveyor, init_dobot
-from Arm import arm_move
+from Actuator import start_conveyor, stop_conveyor, arm_move, init_dobot
 
 def main():
     # ==========================================
