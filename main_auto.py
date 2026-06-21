@@ -6,11 +6,7 @@ import argparse
 from serial.tools import list_ports
 from pydobotplus import Dobot
 from ultralytics import YOLO  # Library untuk me-load model best.pt
-
-# Import modul bawaan dari proyekmu
-from Conveyor import start_conveyor, stop_conveyor
-import Conveyor
-from Arm import arm_move
+from Actuator import start_conveyor, stop_conveyor, arm_move
 
 # --- KUNCI PEMETAAN POSISI GRID (Template 4x4 maumu) ---
 # Format format (x,y) -> (Kolom, Baris)
@@ -107,7 +103,6 @@ def main():
     port = available_ports[1].device if len(available_ports) > 1 else available_ports[0].device
     print(f"[AUTO] Menyambungkan ke Dobot pada port {port}...")
     device = Dobot(port=port)
-    Conveyor.device = device 
 
     # 3. Aktifkan Kamera Scanner Conveyor
     cap = cv2.VideoCapture(0)
@@ -173,7 +168,7 @@ def main():
                                 print(f"          -> Mengirim ke koordinat tujuan AI: Grid ({target_col}, {target_row})")
                                 
                                 # Eksekusi pergerakan lengan robot Dobot ke grid tujuan
-                                arm_move(device, cX_global, cY_global, color_name, target_col, target_row)
+                                arm_move(cX_global, cY_global, color_name, target_col, target_row)
                                 
                                 misi_selesai += 1
                                 print(f"[STATUS MISI] Progress: {misi_selesai}/{total_misi} objek selesai ditata.")

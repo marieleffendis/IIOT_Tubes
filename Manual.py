@@ -1,13 +1,8 @@
 import cv2
 import numpy as np
-import time
 import sys
 import argparse
-from pydobotplus import Dobot
-from Conveyor import start_conveyor, stop_conveyor, device 
-from Arm import arm_move
-import Conveyor
-from serial.tools import list_ports
+from Actuator import start_conveyor, stop_conveyor, arm_move, init_dobot
 
 # Menangkap baris dan kolom yang dikirim oleh HMI.py
 parser =  argparse.ArgumentParser()
@@ -19,27 +14,15 @@ if args.manual:
 	target_row = int(args.manual[1])
 	print(f"[VISION] Memulai misi drop-off ke Grid Manual: Kolom {target_col}, Baris {target_row}")
 else: 
-	print("[ERROR] Tidal ada argumen koordinat grid dari HMI. Program dihentikan.")
+	print("[ERROR] Tidak ada argumen koordinat grid dari HMI. Program dihentikan.")
 	sys.exit()
 
-available_ports = list(list_ports.comports())
-
-if not available_ports:
-    sys.exit(1)
-
-if len(available_ports) > 1:
-    port = available_ports[1].device
-else:
-    port = available_port[0].device
-    
-print(f"[VISION] Menghubungkan langsung ke port {port} (Tanpa Homing) ...")
-device = Dobot(port=port)
-
-Conveyor.device = device
+print("[VISION] Menghubungkan ke Dobot...")
+init_dobot()
 
 cap = cv2.VideoCapture(0) # Sesuaikan indeks kamera
 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
-cap.set(cv2.CAP_PROP_FPS, 30)
+cap.set(cv2.CAP_PROP_FPS, 24)
 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 # Inisialisasi status conveyor di LUAR loop agar tidak terus-menerus di-reset
@@ -57,7 +40,7 @@ color_ranges = {
     "Biru": [(np.array([100, 150, 0]), np.array([140, 255, 255]))]
 }
 
-# --- DEFINISI KOTAK ROI (Tetap di layar) ---
+# Definisi kotak awal (Tetap di layar)
 # Format: X_awal, Y_awal, Lebar, Tinggi
 # Sesuaikan angka ini dengan posisi fisik conveyor Anda di kamera
 ROI_X, ROI_Y, ROI_W, ROI_H = 325, 100, 140, 280
@@ -126,9 +109,9 @@ while not object_found:
 
                     # Panggil fungsi lengan robot dengan koordinat GLOBAL
                     print(f"[AKSI] Robotic arm bergerak ke ({cX_global}, {cY_global}) untuk mengambil objek {color_name}")
-                    arm_move(device, cX_global, cY_global, color_name, target_col, target_row)
+                    arm_move(cX_global, cY_global, color_name, target_col, target_row)
                     print(f"[AKSI] Selesai mengambil {color_name}.")
-                                     
+           
                     break 
 
     # Update tampilan jika tidak ada objek yang diproses di iterasi ini

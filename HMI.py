@@ -15,7 +15,6 @@ import subprocess
 import sys
 import os
 import threading
-from Conveyor import init_dobot
 
 # ============================================================
 # STYLE
@@ -68,8 +67,7 @@ class DobotIntegratedApp(tk.Tk):
         self.container.grid_columnconfigure(0, weight=1)
 
         # Status bar
-        self.status_var = tk.StringVar(value="Status: Menghubungkan ke Dobot & Homing (Silakan Tunggu)...")
-        threading.Thread(target=self._initialize_dobot_at_start, daemon=True).start()
+        self.status_var = tk.StringVar(value="[INFO] Menghubungkan ke Dobot & Homing (Silakan Tunggu)...")
         tk.Label(self, textvariable=self.status_var, bd=1, relief=tk.SUNKEN,
                  anchor=tk.W, bg="#dcdcdc", font=FONT_SMALL).pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -85,16 +83,6 @@ class DobotIntegratedApp(tk.Tk):
     def show_frame(self, page_name):
         self.frames[page_name].tkraise()
     
-    #Homing sekali dalam sekali run
-    def _initialize_dobot_at_start(self):
-        try: 
-            self.dobot_device = init_dobot()
-            if self.dobot_device: 
-                self.status_var.set("Status: Dobot Siap - Silakan Login & Pilih Mode")
-            else:
-                self.status_var.set("Status: Gagal Terhubung ke Dobot!")
-        except Exception as e:
-            self.status_var.set(f"Status: Error Koneksi ({e}") 
 
     def confirm_exit(self):
         if messagebox.askokcancel("Keluar", "Tutup aplikasi?"):
@@ -289,7 +277,7 @@ class DirectControlPage(tk.Frame):
         self._selected_row = None
 
     def _on_grid_click(self, col, row):
-        """Tandai tombol yang dipilih."""
+        # Tandai tombol yang dipilih.
         # Reset highlight tombol sebelumnya
         for btn in self.all_buttons:
             if btn not in (self.btn_back, self.btn_execute):
@@ -322,7 +310,7 @@ class DirectControlPage(tk.Frame):
 
     def _run_thread(self, col, row):
         self.controller.run_script_blocking(
-            "Computer_Vision.py", ["--manual", str(col), str(row)]
+            "Manual.py", ["--manual", str(col), str(row)]
         )
         self.after(0, self._unlock_buttons)
 
