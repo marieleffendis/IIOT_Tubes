@@ -1,37 +1,33 @@
 import time
 import numpy as np
-import cv2
 import sys
 from serial.tools import list_ports
+import cv2
 from pydobotplus import Dobot
 
 device = None
 
+
 def connect_dobot():
     """
-    Mencari port serial & membuka koneksi ke Dobot SAJA (TANPA homing).
-
-    Dipakai oleh Main.py setiap kali dijalankan. Setiap script yang dipanggil
-    HMI (Initialize.py, Main.py) berjalan sebagai proses Python terpisah,
-    sehingga koneksi serial harus dibuka ulang di tiap proses. Tapi homing
-    TIDAK perlu diulang di sini, karena kalibrasi posisi Dobot tersimpan di
-    firmware-nya sendiri (bertahan selama Dobot tidak mati listrik), bukan
-    di proses Python yang sedang menghubunginya.
-
-    Proses homing penuh (connect + home, ~20 detik) hanya dilakukan SEKALI,
-    oleh Initialize.py, yang dipanggil HMI saat aplikasi pertama kali dibuka.
+    Mencari port serial dan membuka koneksi ke Dobot.
+    Tidak melakukan homing di sini.
     """
     global device
+
     available_ports = list(list_ports.comports())
 
     if not available_ports:
         print("[ERROR] Tidak ada port serial yang terdeteksi.")
         sys.exit(1)
 
-    if len(available_ports) > 1:
-        port = available_ports[1].device
-    else:
-        port = available_ports[0].device
+    print("[INFO] Port serial yang terdeteksi:")
+    for i, p in enumerate(available_ports):
+        print(f"  [{i}] {p.device} - {p.description}")
+
+    # Pilih port pertama secara default.
+    # Jika sistem Anda selalu butuh port tertentu, ubah di sini.
+    port = available_ports[0].device
 
     print(f"[INFO] Mencoba terhubung ke Dobot di port: {port}...")
     try:
@@ -43,21 +39,25 @@ def connect_dobot():
 
     return device
 
-# --- KONFIGURASI KOORDINAT DOBOT ---
-# Sesuaikan nilai Z ini dengan kondisi fisik meja/conveyor Anda
-Z_HOVER = 50   # Ketinggian aman (melayang di atas conveyor) agar tidak menabrak benda lain
-Z_PICK = -12   # Ketinggian saat menempel pada objek (menyentuh conveyor)
-HOME_R = 0     # Rotasi default end-effector
 
-# Titik istirahat robot (Home)
+# =========================================================
+# KONFIGURASI KOORDINAT DOBOT
+# =========================================================
+Z_HOVER = 50
+Z_PICK = -12
+HOME_R = 0
+
 HOME_X = 4.5
 HOME_Y = 270
 HOME_Z = 50
 
-# Kecepatan Conveyor
-CONVEYOR_SPEED = 0.45       
+CONVEYOR_SPEED = 0.45
 CONVEYOR_DELAY = 1.16
 
+
+# =========================================================
+# KALIBRASI KAMERA -> DOBOT
+# =========================================================
 pts_kamera = np.array([
     [330, 120],
     [327, 358],
@@ -94,94 +94,129 @@ pts_dobot = np.array([
     [186.4, 41.4],
 ], dtype="float32")
 
-# Hitung Matriks Transformasi (Persamaan)
 MATRIKS_KALIBRASI, status = cv2.findHomography(pts_kamera, pts_dobot)
 
-# --- FUNGSI TRANSLASI ---
+
 def coordinate_transform(cam_x, cam_y):
     """
-    Mengubah koordinat piksel kamera menjadi milimeter Dobot.
+    Mengubah koordinat piksel kamera menjadi koordinat milimeter Dobot.
     """
-    # Bentuk array sesuai format yang diminta OpenCV
+    if MATRIKS_KALIBRASI is None:
+        raise RuntimeError("Matriks kalibrasi tidak tersedia.")
+
     titik_kamera = np.array([[[float(cam_x), float(cam_y)]]], dtype="float32")
-    
-    # Aplikasikan persamaan matriks
     titik_dobot = cv2.perspectiveTransform(titik_kamera, MATRIKS_KALIBRASI)
-    
-    # Ekstrak hasil X dan Y
-    dobot_x = titik_dobot[0][0][0]
-    dobot_y = titik_dobot[0][0][1]
-    
+
+    dobot_x = float(titik_dobot[0][0][0])
+    dobot_y = float(titik_dobot[0][0][1])
+
     return round(dobot_x, 2), round(dobot_y, 2)
+
+
+def get_drop_coordinates(target_col, target_row):
+    """
+    Mengambil koordinat tujuan drop berdasarkan grid.
+    """
+    grid_coordinates = {
+        1: {1: (-18.3, 197.1), 2: (6.13, 197.1), 3: (30.57, 197.1), 4: (55.0, 197.1)},
+        2: {1: (-18.3, 222.73), 2: (6.13, 222.73), 3: (30.57, 222.73), 4: (55.0, 222.73)},
+        3: {1: (-18.3, 248.37), 2: (6.13, 248.37), 3: (30.57, 248.37), 4: (55.0, 248.37)},
+        4: {1: (-18.3, 274.0), 2: (6.13, 274.0), 3: (30.57, 274.0), 4: (55.0, 274.0)},
+    }
+
+    if target_col not in grid_coordinates or target_row not in grid_coordinates[target_col]:
+        raise ValueError(f"Grid target tidak valid: ({target_col}, {target_row})")
+
+    return grid_coordinates[target_col][target_row]
+
 
 def arm_move(cam_x, cam_y, color, target_col, target_row, angle=0.0):
     """
-    Menjalankan urutan pergerakan lengan robot (Pick and Place).
+    Menjalankan urutan pick and place.
     """
+    global device
+
     if device is None:
         print("[ERROR] Dobot tidak terhubung. Mengabaikan perintah gerak.")
         return
-    
-    grid_coordinates = {
-        1: {1: (-18.3, 197.1), 2: (6.13, 197.1), 3: (30.57, 197.1), 4: (55, 197.1)},
-        2: {1: (-18.3, 222.73), 2: (6.13, 222.73), 3: (30.57, 222.73), 4: (55, 222.73)},
-        3: {1: (-18.3, 248.37), 2: (6.13, 248.37), 3: (30.57, 248.37), 4: (55, 248.37)},
-        4: {1: (-18.3, 274), 2: (6.13, 274), 3: (30.57, 274), 4: (55, 274)},
-    }  
 
-    try: 
-        drop_x, drop_y = grid_coordinates[target_col][target_row]
-        print(f"[ARM] Menghitung target penempatan fisik: Grid({target_col},{target_row}) -> Dobot X:{drop_x}, Y:{drop_y}")
-    except KeyError: 
-        print("[PERINGATAN] Koordinat grid salah! Menggunakan koordinat default.")
+    try:
+        drop_x, drop_y = get_drop_coordinates(target_col, target_row)
+        print(
+            f"[ARM] Target penempatan fisik: "
+            f"Grid({target_col},{target_row}) -> Dobot X:{drop_x}, Y:{drop_y}"
+        )
+    except ValueError as e:
+        print(f"[ERROR] {e}")
+        return
 
-    # 1. Terjemahkan koordinat
-    target_x, target_y = coordinate_transform(cam_x, cam_y)
+    try:
+        target_x, target_y = coordinate_transform(cam_x, cam_y)
+    except Exception as e:
+        print(f"[ERROR] Gagal transform koordinat kamera ke Dobot: {e}")
+        return
 
-    print(f"[ARM] Menerima tugas: Objek {color} di Kam({cam_x}, {cam_y}) -> Dobot({target_x}, {target_y})")
+    print(
+        f"[ARM] Menerima tugas: Objek {color} di Kamera({cam_x}, {cam_y}) "
+        f"-> Dobot({target_x}, {target_y})"
+    )
 
-    # 2. Bergerak ke atas objek (Hover)
-    # Gunakan wait=True agar program Python menunggu sampai robot selesai bergerak secara fisik
-    print("[ARM] Bergerak ke titik aman di atas objek...")
-    device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
+    suction_active = False
 
-    # 3. Turun dan ambil objek
-    print("[ARM] Turun mengabil objek...")
-    device.move_to(target_x, target_y, Z_PICK, HOME_R, wait=True)
-    
-    # Nyalakan pompa hisap (Suction Cup) - Sesuaikan jika Anda pakai Gripper
-    device.suck(True)
-    time.sleep(1) # Beri jeda agar hisapan vakum menguat sebelum ditarik
+    try:
+        print("[ARM] Bergerak ke titik aman di atas objek...")
+        device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
 
-    # 4. Naik kembali ke posisi Hover (membawa objek)
-    device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
+        print("[ARM] Turun mengambil objek...")
+        device.move_to(target_x, target_y, Z_PICK, HOME_R, wait=True)
 
-    # 5. Bergerak ke keranjang warna dan jatuhkan
-    print(f"[ARM] Menaruh objek {color} ke area pembuangan Grid ({target_col}, {target_row})...")
-    device.move_to(drop_x, drop_y, Z_HOVER, angle, wait=True)
-    device.move_to(drop_x, drop_y, -45, angle, wait=True)
-    
-    # Matikan hisapan
-    device.suck(False)
-    time.sleep(1) # Beri waktu agar objek benar-benar terlepas
-    
-    # Naik lagi ke posisi aman
-    device.move_to(drop_x, drop_y, Z_HOVER, angle, wait=True)
+        device.suck(True)
+        suction_active = True
+        time.sleep(1)
 
-    # 7. Kembali ke posisi standby (Home)
-    print("[ARM] Selesai. Kembali ke Home.")
-    device.move_to(HOME_X, HOME_Y, HOME_Z, HOME_R, wait=True)
+        print("[ARM] Naik kembali ke posisi aman...")
+        device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
+
+        print(f"[ARM] Menaruh objek {color} ke Grid ({target_col}, {target_row})...")
+        device.move_to(drop_x, drop_y, Z_HOVER, angle, wait=True)
+        device.move_to(drop_x, drop_y, -45, angle, wait=True)
+
+        device.suck(False)
+        suction_active = False
+        time.sleep(1)
+
+        print("[ARM] Naik lagi ke posisi aman...")
+        device.move_to(drop_x, drop_y, Z_HOVER, angle, wait=True)
+
+        print("[ARM] Kembali ke Home...")
+        device.move_to(HOME_X, HOME_Y, HOME_Z, HOME_R, wait=True)
+
+    except Exception as e:
+        print(f"[ERROR] Gagal menjalankan urutan arm_move: {e}")
+
+    finally:
+        if suction_active:
+            try:
+                device.suck(False)
+            except Exception:
+                pass
+
 
 def start_conveyor():
+    global device
     if device is None:
         print("[ERROR] Dobot tidak terhubung. Tidak bisa menjalankan conveyor.")
         return
+
     print("[CONVEYOR] START")
     device.conveyor_belt(speed=CONVEYOR_SPEED, direction=1)
 
+
 def stop_conveyor():
+    global device
     if device is None:
         print("[ERROR] Dobot tidak terhubung. Tidak bisa menghentikan conveyor.")
         return
+
     print("[CONVEYOR] STOP")
     device.conveyor_belt(speed=0, direction=1)
