@@ -332,53 +332,78 @@ class DirectControlPage(tk.Frame):
 
 
 # ============================================================
-# PAGE 4: SMART AUTO-SORT — upload gambar target 4×4
+# PAGE 4: SMART AUTO-SORT — Konfigurasi Target Warna ke Grid
 # ============================================================
 class SmartSortPage(tk.Frame):
     """
-    User memilih gambar PNG yang menggambarkan susunan target 4×4.
-    Program main_auto.py akan membaca gambar tersebut dan menyusun
-    blok dari conveyor ke posisi sesuai gambar secara otomatis.
+    User menentukan posisi grid 4x4 untuk masing-masing warna balok.
+    Program main_auto.py akan menyusun balok dari conveyor ke posisi tersebut.
     """
 
     def __init__(self, parent, controller):
         super().__init__(parent, bg=COLOR_ACCENT)
-        self.controller         = controller
-        self.selected_image_path = None
+        self.controller = controller
 
         # --- Header ---
-        tk.Label(self, text="MODE 2 — SMART AUTO-SORT",
+        tk.Label(self, text="MODE 2 — SMART AUTO-SORT (COLOR ASSIGNMENT)",
                  font=FONT_HEADER, fg=COLOR_FG, bg=COLOR_ACCENT).pack(pady=15)
         tk.Label(self,
-                 text="Upload gambar PNG papan target 4×4. Robot akan menyusun blok secara otomatis.",
+                 text="Tentukan posisi target Kolom (1-4) dan Baris (1-4) untuk setiap warna balok.",
                  font=FONT_SMALL, fg="#bdc3c7", bg=COLOR_ACCENT).pack()
 
-        # --- Upload section ---
-        upload_frame = tk.LabelFrame(self, text=" File Target ", font=FONT_BODY,
-                                     fg=COLOR_FG, bg=COLOR_ACCENT, padx=10, pady=10)
-        upload_frame.pack(pady=20, padx=40, fill=tk.X)
+        # --- Form Setting Warna ---
+        form_frame = tk.LabelFrame(self, text=" Pengaturan Posisi Grid Target ", font=FONT_BODY,
+                                   fg=COLOR_FG, bg=COLOR_ACCENT, padx=20, pady=15)
+        form_frame.pack(pady=20, padx=40, fill=tk.BOTH, expand=True)
 
-        self.lbl_file = tk.Label(upload_frame, text="Belum ada file dipilih",
-                                  font=FONT_BODY, fg="#f39c12", bg=COLOR_ACCENT,
-                                  wraplength=600, justify=tk.LEFT)
-        self.lbl_file.pack(side=tk.LEFT, padx=10, expand=True, fill=tk.X)
+        # Konfigurasi Grid Layout di dalam form_frame
+        form_frame.columnconfigure(1, weight=1)
+        form_frame.columnconfigure(2, weight=1)
 
-        tk.Button(upload_frame, text="📂  Pilih File PNG", font=FONT_BTN,
-                  bg="#2980b9", fg="white", command=self._browse_file).pack(side=tk.RIGHT)
+        # Header baris form
+        tk.Label(form_frame, text="Warna Balok", font=FONT_BTN, fg=COLOR_FG, bg=COLOR_ACCENT).grid(row=0, column=0, pady=5, sticky="w")
+        tk.Label(form_frame, text="Kolom (Col)", font=FONT_BTN, fg=COLOR_FG, bg=COLOR_ACCENT).grid(row=0, column=1, pady=5)
+        tk.Label(form_frame, text="Baris (Row)", font=FONT_BTN, fg=COLOR_FG, bg=COLOR_ACCENT).grid(row=0, column=2, pady=5)
 
-        # --- Preview info ---
-        self.lbl_info = tk.Label(self, text="", font=FONT_SMALL,
-                                  fg="#7f8c8d", bg=COLOR_ACCENT)
+        # Daftar warna dan variabel penyimpan input
+        self.colors = ["Merah", "Hijau", "Kuning", "Biru"]
+        self.inputs = {}
+
+        options_grid = ["", "1", "2", "3", "4"] # Kosong berarti warna tersebut tidak diaktifkan/disortir
+
+        for idx, color in enumerate(self.colors):
+            row_idx = idx + 1
+            
+            # Label Warna
+            lbl_color = tk.Label(form_frame, text=f"■ {color}", font=FONT_BODY, 
+                                 fg=GRID_BTN_COLORS.get(color.lower(), COLOR_FG), bg=COLOR_ACCENT)
+            lbl_color.grid(row=row_idx, column=0, pady=10, sticky="w")
+            
+            # Combobox Kolom
+            cb_col = ttk.Combobox(form_frame, values=options_grid, width=8, state="readonly", font=FONT_BODY)
+            cb_col.grid(row=row_idx, column=1, pady=10)
+            cb_col.current(0) # Default kosong
+            
+            # Combobox Baris
+            cb_row = ttk.Combobox(form_frame, values=options_grid, width=8, state="readonly", font=FONT_BODY)
+            cb_row.grid(row=row_idx, column=2, pady=10)
+            cb_row.current(0) # Default kosong
+            
+            # Simpan referensi widget ke dictionary
+            self.inputs[color] = {"col": cb_col, "row": cb_row}
+
+        # --- Preview/Status info ---
+        self.lbl_info = tk.Label(self, text="Siap menerima penugasan koordinat.", font=FONT_SMALL,
+                                  fg="#95a5a6", bg=COLOR_ACCENT)
         self.lbl_info.pack()
 
         # --- Tombol aksi ---
         btn_frame = tk.Frame(self, bg=COLOR_ACCENT)
-        btn_frame.pack(pady=25)
+        btn_frame.pack(pady=15)
 
         self.btn_start = tk.Button(btn_frame, text="▶  MULAI MISI AUTO-SORT",
                                    font=FONT_BTN, bg=COLOR_BTN_2, fg="white",
-                                   width=28, height=2, state=tk.DISABLED,
-                                   command=self._start_process)
+                                   width=28, height=2, command=self._start_process)
         self.btn_start.pack(pady=8)
 
         self.btn_back = tk.Button(btn_frame, text="Kembali ke Menu",
@@ -386,52 +411,54 @@ class SmartSortPage(tk.Frame):
                                   command=lambda: controller.show_frame("ModeSelectionPage"))
         self.btn_back.pack(pady=5)
 
-    def _browse_file(self):
-        path = filedialog.askopenfilename(
-            title="Pilih Gambar Target 4×4",
-            filetypes=[("Image files", "*.png *.jpg *.jpeg"), ("All files", "*.*")]
-        )
-        if path:
-            self.selected_image_path = path
-            filename = os.path.basename(path)
-            self.lbl_file.configure(text=filename)
-            self.lbl_info.configure(
-                text=f"Path: {path}",
-                fg="#95a5a6"
-            )
-            self.btn_start.configure(state=tk.NORMAL)
-            print(f"[GUI] File dipilih: {path}")
-
     def _start_process(self):
-        if not self.selected_image_path:
-            messagebox.showwarning("File Belum Dipilih", "Silakan pilih file gambar target terlebih dahulu.")
+        # 1. Bangun argument list berdasarkan input combobox
+        args_to_send = []
+        summary_msg = "Konfirmasi target sorting:\n"
+        has_assignment = False
+
+        for color in self.colors:
+            col_val = self.inputs[color]["col"].get()
+            row_val = self.inputs[color]["row"].get()
+            
+            # Jika kedua combobox kolom & baris diisi
+            if col_val != "" and row_val != "":
+                args_to_send.extend([f"--{color.lower()}", col_val, row_val])
+                summary_msg += f"- {color} -> Grid ({col_val}, {row_val})\n"
+                has_assignment = True
+            elif (col_val != "" and row_val == "") or (col_val == "" and row_val != ""):
+                messagebox.showwarning("Input Tidak Lengkap", f"Koordinat untuk warna {color} harus diisi lengkap (Kolom DAN Baris)!")
+                return
+
+        if not has_assignment:
+            messagebox.showwarning("Input Kosong", "Minimal tentukan posisi target untuk satu warna balok!")
             return
 
-        if not messagebox.askyesno("Konfirmasi",
-                                    f"Mulai Auto-Sort dengan target:\n{os.path.basename(self.selected_image_path)}?"):
+        if not messagebox.askyesno("Konfirmasi Misi", f"{summary_msg}\nApakah susunan di atas sudah benar?"):
             return
 
+        # Disable tombol agar tidak double klik saat proses berjalan
         self.btn_start.configure(state=tk.DISABLED, bg="#7f8c8d")
         self.btn_back.configure(state=tk.DISABLED)
-        self.lbl_info.configure(text="⏳ Proses berjalan...", fg=COLOR_SELECTED)
+        self.lbl_info.configure(text="⏳ Proses sortir otomatis sedang berjalan...", fg=COLOR_SELECTED)
 
-        threading.Thread(target=self._run_thread, daemon=True).start()
+        # Jalankan di thread terpisah agar GUI tidak membeku (freeze)
+        threading.Thread(target=self._run_thread, args=(args_to_send,), daemon=True).start()
 
-    def _run_thread(self):
-        success = self.controller.run_script_blocking(
-            "main_auto.py", ["--image", self.selected_image_path]
-        )
+    def _run_thread(self, args):
+        # Memanggil main_auto.py secara blocking dengan argumen warna dinamis
+        success = self.controller.run_script_blocking("main_auto.py", args)
         self.after(0, lambda: self._on_done(success))
 
     def _on_done(self, success):
+        # Mengembalikan status tombol aktif kembali
         self.btn_start.configure(state=tk.NORMAL, bg=COLOR_BTN_2)
         self.btn_back.configure(state=tk.NORMAL)
         if success:
             self.lbl_info.configure(text="✅ Misi selesai.", fg="#27ae60")
-            messagebox.showinfo("Selesai", "Auto-Sort berhasil diselesaikan!")
+            messagebox.showinfo("Selesai", "Proses Auto-Sort selesai menata seluruh balok target!")
         else:
-            self.lbl_info.configure(text="❌ Misi gagal. Lihat log terminal.", fg=COLOR_DANGER)
-
+            self.lbl_info.configure(text="❌ Misi gagal atau dihentikan. Periksa log terminal.", fg=COLOR_DANGER)
 
 # ============================================================
 # MAIN
