@@ -21,7 +21,7 @@ def is_inside_roi(cX, cY):
     return ROI_X <= cX <= ROI_X + ROI_W and ROI_Y <= cY <= ROI_Y + ROI_H
 
 PICK_MARGIN_X = 5
-PICK_MARGIN_Y = 30  # makin besar = makin "dalam" sebelum arm aktif
+PICK_MARGIN_Y = 40  # makin besar = makin "dalam" sebelum arm aktif
 
 def is_inside_pick_zone(cX, cY):
     return (

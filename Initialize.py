@@ -30,8 +30,8 @@ def main():
     device.home()
     time.sleep(20)  # Jeda manual untuk homing
     print("[INFO] Homing dianggap selesai, siap menjalankan conveyor!")
+    device.move_to(4.5, 270, 50, 0, wait=True)
     sys.exit(0)
-
 
 if __name__ == "__main__":
     main()
