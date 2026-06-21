@@ -98,10 +98,10 @@ while not object_found:
                     # Gambar bounding box dan centroid menggunakan koordinat GLOBAL
                     x, y, w, h = cv2.boundingRect(c)
                     
-                    cv2.rectangle(frame, (x + ROI_X, y + ROI_Y), (x + w + ROI_X, y + h + ROI_Y), (0, 255, 0), 2)
+                    cv2.rectangle(frame, (ROI_X, ROI_Y), (ROI_X + ROI_W, ROI_Y + ROI_H), (250, 0, 0), 2)
                     cv2.circle(frame, (cX_global, cY_global), 5, (255, 255, 255), -1)
                     cv2.putText(frame, f"{color_name} Center", (cX_global - 20, cY_global - 20), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
                     # Update tampilan SEBELUM arm memblokir program
                     cv2.imshow("Camera Feed", frame)
