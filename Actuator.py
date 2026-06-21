@@ -47,7 +47,6 @@ def connect_dobot():
 # Sesuaikan nilai Z ini dengan kondisi fisik meja/conveyor Anda
 Z_HOVER = 50   # Ketinggian aman (melayang di atas conveyor) agar tidak menabrak benda lain
 Z_PICK = -12   # Ketinggian saat menempel pada objek (menyentuh conveyor)
-HOME_R = 0     # Rotasi default end-effector
 
 # Titik istirahat robot (Home)
 HOME_X = 4.5
@@ -114,7 +113,7 @@ def coordinate_transform(cam_x, cam_y):
     
     return round(dobot_x, 2), round(dobot_y, 2)
 
-def arm_move(cam_x, cam_y, color, target_col, target_row):
+def arm_move(cam_x, cam_y, color, target_col, target_row, angle=0.0):
     """
     Menjalankan urutan pergerakan lengan robot (Pick and Place).
     """
@@ -137,39 +136,40 @@ def arm_move(cam_x, cam_y, color, target_col, target_row):
 
     # 1. Terjemahkan koordinat
     target_x, target_y = coordinate_transform(cam_x, cam_y)
+
     print(f"[ARM] Menerima tugas: Objek {color} di Kam({cam_x}, {cam_y}) -> Dobot({target_x}, {target_y})")
 
     # 2. Bergerak ke atas objek (Hover)
     # Gunakan wait=True agar program Python menunggu sampai robot selesai bergerak secara fisik
     print("[ARM] Bergerak ke titik aman di atas objek...")
-    device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
+    device.move_to(target_x, target_y, Z_HOVER, angle, wait=True)
 
     # 3. Turun dan ambil objek
     print("[ARM] Turun mengabil objek...")
-    device.move_to(target_x, target_y, Z_PICK, HOME_R, wait=True)
+    device.move_to(target_x, target_y, Z_PICK, angle, wait=True)
     
     # Nyalakan pompa hisap (Suction Cup) - Sesuaikan jika Anda pakai Gripper
     device.suck(True)
     time.sleep(1) # Beri jeda agar hisapan vakum menguat sebelum ditarik
 
     # 4. Naik kembali ke posisi Hover (membawa objek)
-    device.move_to(target_x, target_y, Z_HOVER, HOME_R, wait=True)
+    device.move_to(target_x, target_y, Z_HOVER, angle, wait=True)
 
     # 5. Bergerak ke keranjang warna dan jatuhkan
     print(f"[ARM] Menaruh objek {color} ke area pembuangan Grid ({target_col}, {target_row})...")
-    device.move_to(drop_x, drop_y, Z_HOVER, HOME_R, wait=True)
-    device.move_to(drop_x, drop_y, -45, HOME_R, wait=True)
+    device.move_to(drop_x, drop_y, Z_HOVER, angle, wait=True)
+    device.move_to(drop_x, drop_y, -45, angle, wait=True)
     
     # Matikan hisapan
     device.suck(False)
     time.sleep(1) # Beri waktu agar objek benar-benar terlepas
     
     # Naik lagi ke posisi aman
-    device.move_to(drop_x, drop_y, Z_HOVER, HOME_R, wait=True)
+    device.move_to(drop_x, drop_y, Z_HOVER, angle, wait=True)
 
     # 7. Kembali ke posisi standby (Home)
     print("[ARM] Selesai. Kembali ke Home.")
-    device.move_to(HOME_X, HOME_Y, HOME_Z, HOME_R, wait=True)
+    device.move_to(HOME_X, HOME_Y, HOME_Z, angle, wait=True)
 
 def start_conveyor():
     if device is None:
