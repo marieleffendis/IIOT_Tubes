@@ -51,21 +51,43 @@ CONVEYOR_SPEED = 0.45
 CONVEYOR_DELAY = 1.16
 
 pts_kamera = np.array([
-    [440, 120], # Titik 1
-    [440, 360], # Titik 2
-    [340, 360], # Titik 3
-    [340, 120]  # Titik 4
+    [330, 120],
+    [327, 358],
+    [230, 362],
+    [230, 117],
+    [312, 203],
+    [308, 170],
+    [274, 230],
+    [319, 275],
+    [268, 298],
+    [325, 297],
+    [269, 138],
+    [242, 180],
+    [237, 279],
+    [256, 332],
+    [294, 251],
 ], dtype="float32")
 
 pts_dobot = np.array([
-    [216.1, 141.5],   # Titik 1
-    [212.9, -43.2],  # Titik 2
-    [134.6, -43.2],  # Titik 3
-    [135.9, 142.5]   # Titik 4
+    [216.1, 141.5],
+    [212.9, -43.2],
+    [134.6, -43.2],
+    [135.9, 142.5],
+    [198.7, 79.1],
+    [196.3, 102.9],
+    [169.5, 57.8],
+    [204.7, 20.8],
+    [164.3, 5.1],
+    [209.7, 6.3],
+    [168.2, 126.7],
+    [144.6, 95.1],
+    [139.8, 20.2],
+    [157.6, -21.2],
+    [186.4, 41.4],
 ], dtype="float32")
 
 # Hitung Matriks Transformasi (Persamaan)
-MATRIKS_KALIBRASI = cv2.getPerspectiveTransform(pts_kamera, pts_dobot)
+MATRIKS_KALIBRASI, status = cv2.findHomography(pts_kamera, pts_dobot)
 
 # --- FUNGSI TRANSLASI ---
 def coordinate_transform(cam_x, cam_y):
