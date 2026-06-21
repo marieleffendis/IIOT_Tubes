@@ -180,7 +180,7 @@ def run_manual(target_col, target_row):
 
             # Stabilitas kandidat
             if candidate is not None:
-                color_name, cX, cY, box, angle, _ = candidate
+                color_name, cX, cY, box, angle, inside_roi, inside_pick = candidate
 
                 if color_name == last_candidate_color:
                     stable_count += 1
@@ -281,7 +281,7 @@ def run_auto(misi_aktif):
 
             # Kandidat valid harus stabil beberapa frame
             if candidate is not None:
-                color_name, cX, cY, box, angle, _ = candidate
+                color_name, cX, cY, box, angle, inside_roi, inside_pick = candidate
 
                 candidate_key = color_name  # kalau mau lebih ketat, bisa pakai (color_name, cX, cY)
 
