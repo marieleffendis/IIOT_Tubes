@@ -174,6 +174,12 @@ while True:
     if not object_processed:
         cv2.imshow("Camera Feed", frame)
 
+    # [PERBAIKAN] Setelah 1 objek selesai diambil & ditaruh, langsung hentikan
+    # program (bukan lanjut mendeteksi objek berikutnya), supaya GUI kembali
+    # ke halaman pemilihan kolom.
+    if object_processed:
+        break
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
