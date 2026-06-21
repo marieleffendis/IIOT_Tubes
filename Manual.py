@@ -9,6 +9,14 @@ parser =  argparse.ArgumentParser()
 parser.add_argument('--manual', nargs=2, help='Format: --manual col row')
 args = parser.parse_args()
 
+cap = cv2.VideoCapture(0) # Sesuaikan indeks kamera jika perlu
+cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+cap.set(cv2.CAP_PROP_FPS, 30)
+cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
 if args.manual: 
 	target_col = int(args.manual[0])
 	target_row = int(args.manual[1])
@@ -43,7 +51,7 @@ color_ranges = {
 # Definisi kotak awal (Tetap di layar)
 # Format: X_awal, Y_awal, Lebar, Tinggi
 # Sesuaikan angka ini dengan posisi fisik conveyor Anda di kamera
-ROI_X, ROI_Y, ROI_W, ROI_H = 325, 100, 140, 280
+ROI_X, ROI_Y, ROI_W, ROI_H = 215, 100, 140, 280
 
 print("[VISION] Mencari benda di arena ROI...")
 
