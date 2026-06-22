@@ -61,6 +61,14 @@ def build_mask(hsv, ranges):
 
 def detect_largest_object(hsv, ranges, min_area=MIN_CONTOUR_AREA):
     mask = build_mask(hsv, ranges)
+
+    # Batasi deteksi kontur dan titik berat HANYA di dalam ROI.
+    # Piksel di luar ROI di-nol-kan sehingga findContours tidak pernah
+    # memproses area di luar batas conveyor.
+    roi_spatial_mask = np.zeros(hsv.shape[:2], dtype="uint8")
+    roi_spatial_mask[ROI_Y:ROI_Y + ROI_H, ROI_X:ROI_X + ROI_W] = 255
+    mask = cv2.bitwise_and(mask, roi_spatial_mask)
+
     contours, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
