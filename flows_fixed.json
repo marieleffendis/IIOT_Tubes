@@ -1,0 +1,772 @@
+[
+  {
+    "id": "fd6dea6de6732618",
+    "type": "tab",
+    "label": "MQTT Publisher and Subscriber",
+    "disabled": false,
+    "info": "",
+    "env": []
+  },
+  {
+    "id": "52552f77296ace9b",
+    "type": "mqtt in",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "topic": "IIoT/Labtek_VI/Lab_TF_C/docon_01/Telemetry/dobot",
+    "qos": "2",
+    "datatype": "auto-detect",
+    "broker": "ba14c4ba8bc1da53",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 270,
+    "y": 220,
+    "wires": [
+      [
+        "71d4a9c5dafa6de8"
+      ]
+    ]
+  },
+  {
+    "id": "6ca3155eb2c74f16",
+    "type": "ui_text",
+    "z": "fd6dea6de6732618",
+    "group": "6f557606a862491e",
+    "order": 1,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Koordinat X:",
+    "format": "{{msg.payload.x}} mm",
+    "layout": "row-spread",
+    "className": "",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#000000",
+    "x": 870,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "8fcc3884231d97c8",
+    "type": "ui_text",
+    "z": "fd6dea6de6732618",
+    "group": "6f557606a862491e",
+    "order": 2,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Koordinat Y:",
+    "format": "{{msg.payload.y}} mm",
+    "layout": "row-spread",
+    "className": "",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#000000",
+    "x": 870,
+    "y": 220,
+    "wires": []
+  },
+  {
+    "id": "8d9f194b7429fc1c",
+    "type": "ui_text",
+    "z": "fd6dea6de6732618",
+    "group": "6f557606a862491e",
+    "order": 3,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Sudut kemiringan:",
+    "format": "{{msg.payload.angle}} ",
+    "layout": "row-spread",
+    "className": "",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#000000",
+    "x": 890,
+    "y": 300,
+    "wires": []
+  },
+  {
+    "id": "71d4a9c5dafa6de8",
+    "type": "json",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 570,
+    "y": 220,
+    "wires": [
+      [
+        "6ca3155eb2c74f16",
+        "8fcc3884231d97c8",
+        "8d9f194b7429fc1c"
+      ]
+    ]
+  },
+  {
+    "id": "e50f436d7df677d8",
+    "type": "mqtt in",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "topic": "IIoT/Labtek_VI/Lab_TF_C/docon_01/State/system",
+    "qos": "2",
+    "datatype": "auto-detect",
+    "broker": "ba14c4ba8bc1da53",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 270,
+    "y": 420,
+    "wires": [
+      [
+        "d5fcedd4b78c3203"
+      ]
+    ]
+  },
+  {
+    "id": "ab70180adaa6f707",
+    "type": "ui_text",
+    "z": "fd6dea6de6732618",
+    "group": "6f557606a862491e",
+    "order": 4,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Kondisi sistem:",
+    "format": "{{msg.payload.state}}",
+    "layout": "row-spread",
+    "className": "",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#000000",
+    "x": 840,
+    "y": 420,
+    "wires": []
+  },
+  {
+    "id": "d5fcedd4b78c3203",
+    "type": "json",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 630,
+    "y": 420,
+    "wires": [
+      [
+        "ab70180adaa6f707"
+      ]
+    ]
+  },
+  {
+    "id": "0783b840bce4eec4",
+    "type": "ui_numeric",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "label": "Kolom:",
+    "tooltip": "",
+    "group": "6f557606a862491e",
+    "order": 5,
+    "width": 0,
+    "height": 0,
+    "wrap": false,
+    "passthru": true,
+    "topic": "topic",
+    "topicType": "msg",
+    "format": "{{value}}",
+    "min": "1",
+    "max": "4",
+    "step": 1,
+    "className": "",
+    "x": 140,
+    "y": 760,
+    "wires": [
+      [
+        "ec28bfa280e617bb"
+      ]
+    ]
+  },
+  {
+    "id": "483792e3819196fa",
+    "type": "ui_numeric",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "label": "Baris:",
+    "tooltip": "",
+    "group": "6f557606a862491e",
+    "order": 6,
+    "width": 0,
+    "height": 0,
+    "wrap": false,
+    "passthru": true,
+    "topic": "topic",
+    "topicType": "msg",
+    "format": "{{value}}",
+    "min": "1",
+    "max": "4",
+    "step": 1,
+    "className": "",
+    "x": 130,
+    "y": 820,
+    "wires": [
+      [
+        "e285dc6af3d87378"
+      ]
+    ]
+  },
+  {
+    "id": "c00aa03e86e2e7f9",
+    "type": "ui_button",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "group": "6f557606a862491e",
+    "order": 7,
+    "width": 0,
+    "height": 0,
+    "passthru": false,
+    "label": "Kirim perintah:",
+    "tooltip": "",
+    "color": "",
+    "bgcolor": "",
+    "className": "",
+    "icon": "",
+    "payload": "",
+    "payloadType": "str",
+    "topic": "topic",
+    "topicType": "msg",
+    "x": 160,
+    "y": 880,
+    "wires": [
+      [
+        "19f6c60447bb0afb"
+      ]
+    ]
+  },
+  {
+    "id": "19f6c60447bb0afb",
+    "type": "change",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "target_data",
+        "tot": "flow",
+        "dc": true
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 360,
+    "y": 880,
+    "wires": [
+      [
+        "ff001122334455aa"
+      ]
+    ]
+  },
+  {
+    "id": "ec28bfa280e617bb",
+    "type": "change",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "rules": [
+      {
+        "t": "set",
+        "p": "topic",
+        "pt": "msg",
+        "to": "col",
+        "tot": "str"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 330,
+    "y": 760,
+    "wires": [
+      [
+        "8db98fc61e0768e2"
+      ]
+    ]
+  },
+  {
+    "id": "e285dc6af3d87378",
+    "type": "change",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "rules": [
+      {
+        "t": "set",
+        "p": "topic",
+        "pt": "msg",
+        "to": "row",
+        "tot": "str"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 330,
+    "y": 820,
+    "wires": [
+      [
+        "8db98fc61e0768e2"
+      ]
+    ]
+  },
+  {
+    "id": "8db98fc61e0768e2",
+    "type": "join",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "mode": "custom",
+    "build": "object",
+    "property": "payload",
+    "propertyType": "msg",
+    "key": "topic",
+    "joiner": "\\n",
+    "joinerType": "str",
+    "useparts": false,
+    "accumulate": true,
+    "timeout": "",
+    "count": "2",
+    "reduceRight": false,
+    "reduceExp": "",
+    "reduceInit": "",
+    "reduceInitType": "",
+    "reduceFixup": "",
+    "x": 510,
+    "y": 800,
+    "wires": [
+      [
+        "b61961eb89d1c7a9"
+      ]
+    ]
+  },
+  {
+    "id": "b61961eb89d1c7a9",
+    "type": "change",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "rules": [
+      {
+        "t": "set",
+        "p": "target_data",
+        "pt": "flow",
+        "to": "payload",
+        "tot": "msg"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 710,
+    "y": 800,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "e64134f108a560db",
+    "type": "mqtt out",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "topic": "IIoT/Labtek_VI/Lab_TF_C/docon_01/Command/target",
+    "qos": "1",
+    "retain": "",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "ba14c4ba8bc1da53",
+    "x": 680,
+    "y": 880,
+    "wires": []
+  },
+  {
+    "id": "1adc4ecfef06cbe7",
+    "type": "mqtt in",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "topic": "IIoT/Labtek_VI/Lab_TF_C/docon_01/Telemetry/color",
+    "qos": "2",
+    "datatype": "auto-detect",
+    "broker": "ba14c4ba8bc1da53",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 270,
+    "y": 500,
+    "wires": [
+      [
+        "fdc4e7c00f644b95"
+      ]
+    ]
+  },
+  {
+    "id": "dd0cae95ca9fb979",
+    "type": "ui_text",
+    "z": "fd6dea6de6732618",
+    "group": "6f557606a862491e",
+    "order": 2,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Warna:",
+    "format": "{{msg.payload.color}}",
+    "layout": "row-spread",
+    "className": "",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#000000",
+    "x": 840,
+    "y": 500,
+    "wires": []
+  },
+  {
+    "id": "fdc4e7c00f644b95",
+    "type": "json",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 630,
+    "y": 500,
+    "wires": [
+      [
+        "dd0cae95ca9fb979"
+      ]
+    ]
+  },
+  {
+    "id": "5dc70fbe4494b769",
+    "type": "mqtt in",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "topic": "IIoT/Labtek_VI/Lab_TF_C/docon_01/Telemetry/camera",
+    "qos": "2",
+    "datatype": "auto-detect",
+    "broker": "ba14c4ba8bc1da53",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 280,
+    "y": 580,
+    "wires": [
+      [
+        "bbe1bee4b7cacfe5"
+      ]
+    ]
+  },
+  {
+    "id": "b3cec238b2a76bdc",
+    "type": "ui_text",
+    "z": "fd6dea6de6732618",
+    "group": "6f557606a862491e",
+    "order": 2,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "FPS kamera:",
+    "format": "{{msg.payload.fps}}",
+    "layout": "row-spread",
+    "className": "",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#000000",
+    "x": 850,
+    "y": 580,
+    "wires": []
+  },
+  {
+    "id": "bbe1bee4b7cacfe5",
+    "type": "json",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 630,
+    "y": 580,
+    "wires": [
+      [
+        "b3cec238b2a76bdc"
+      ]
+    ]
+  },
+  {
+    "id": "80da8302439d8724",
+    "type": "mqtt in",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "topic": "IIoT/Labtek_VI/Lab_TF_C/docon_01/Telemetry/conveyor",
+    "qos": "2",
+    "datatype": "auto-detect",
+    "broker": "ba14c4ba8bc1da53",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 290,
+    "y": 360,
+    "wires": [
+      [
+        "618e84d0ef0333b5"
+      ]
+    ]
+  },
+  {
+    "id": "183cefd8dfb51ad5",
+    "type": "ui_text",
+    "z": "fd6dea6de6732618",
+    "group": "6f557606a862491e",
+    "order": 2,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Status conveyor:",
+    "format": "{{msg.payload.status}}",
+    "layout": "row-spread",
+    "className": "",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#000000",
+    "x": 860,
+    "y": 360,
+    "wires": []
+  },
+  {
+    "id": "618e84d0ef0333b5",
+    "type": "json",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 630,
+    "y": 360,
+    "wires": [
+      [
+        "183cefd8dfb51ad5"
+      ]
+    ]
+  },
+  {
+    "id": "d5462216ce67c988",
+    "type": "mqtt in",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "topic": "IIoT/Labtek_VI/Lab_TF_C/docon_01/State/mode",
+    "qos": "2",
+    "datatype": "auto-detect",
+    "broker": "ba14c4ba8bc1da53",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 260,
+    "y": 660,
+    "wires": [
+      [
+        "cdbdc07b3df94aa6"
+      ]
+    ]
+  },
+  {
+    "id": "59dd9bc476b345e1",
+    "type": "ui_text",
+    "z": "fd6dea6de6732618",
+    "group": "6f557606a862491e",
+    "order": 2,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Mode sistem:",
+    "format": "{{msg.payload.mode}}",
+    "layout": "row-spread",
+    "className": "",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#000000",
+    "x": 850,
+    "y": 660,
+    "wires": []
+  },
+  {
+    "id": "cdbdc07b3df94aa6",
+    "type": "json",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 630,
+    "y": 660,
+    "wires": [
+      [
+        "59dd9bc476b345e1"
+      ]
+    ]
+  },
+  {
+    "id": "ba14c4ba8bc1da53",
+    "type": "mqtt-broker",
+    "name": "Aedes MQTT",
+    "broker": "localhost",
+    "port": 1883,
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "6f557606a862491e",
+    "type": "ui_group",
+    "name": "Dashboard MQTT",
+    "tab": "e6d076309623dbc2",
+    "order": 1,
+    "disp": true,
+    "width": 6,
+    "collapse": true,
+    "className": ""
+  },
+  {
+    "id": "e6d076309623dbc2",
+    "type": "ui_tab",
+    "name": "Home",
+    "icon": "dashboard",
+    "disabled": false,
+    "hidden": false
+  },
+  {
+    "id": "9f7d172d649e027b",
+    "type": "global-config",
+    "env": [],
+    "modules": {
+      "node-red-dashboard": "3.6.6"
+    }
+  },
+  {
+    "id": "aabbcc112233aabb",
+    "type": "mqtt in",
+    "z": "fd6dea6de6732618",
+    "name": "CMD Target (Monitor)",
+    "topic": "IIoT/Labtek_VI/Lab_TF_C/docon_01/Command/target",
+    "qos": "1",
+    "datatype": "auto-detect",
+    "broker": "ba14c4ba8bc1da53",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 270,
+    "y": 960,
+    "wires": [
+      [
+        "aabbcc112233aabc"
+      ]
+    ]
+  },
+  {
+    "id": "aabbcc112233aabc",
+    "type": "json",
+    "z": "fd6dea6de6732618",
+    "name": "",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 510,
+    "y": 960,
+    "wires": [
+      [
+        "aabbcc112233aabd"
+      ]
+    ]
+  },
+  {
+    "id": "aabbcc112233aabd",
+    "type": "ui_text",
+    "z": "fd6dea6de6732618",
+    "group": "6f557606a862491e",
+    "order": 8,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Target grid terkirim:",
+    "format": "Kolom {{msg.payload.col}}, Baris {{msg.payload.row}}",
+    "layout": "row-spread",
+    "className": "",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#000000",
+    "x": 760,
+    "y": 960,
+    "wires": []
+  },
+  {
+    "id": "ff001122334455aa",
+    "type": "json",
+    "z": "fd6dea6de6732618",
+    "name": "Stringify target",
+    "property": "payload",
+    "action": "str",
+    "pretty": false,
+    "x": 520,
+    "y": 880,
+    "wires": [
+      [
+        "e64134f108a560db"
+      ]
+    ]
+  }
+]
