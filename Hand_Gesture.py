@@ -264,6 +264,22 @@ def main():
     window_name = "Hand Gesture -> Dobot Control (v2: Auto Port + Stable Zone)"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
+    # cv2.WND_PROP_FULLSCREEN saja seringkali tidak dihormati oleh window manager
+    # di Linux (mis. GNOME). Fix: paksa resize window ke ukuran layar + pindah ke (0,0)
+    # dulu, baru set properti fullscreen -- kombinasi ini jauh lebih konsisten.
+    try:
+        import tkinter
+        _root = tkinter.Tk()
+        screen_w = _root.winfo_screenwidth()
+        screen_h = _root.winfo_screenheight()
+        _root.destroy()
+    except Exception:
+        screen_w, screen_h = 1920, 1080  # fallback kalau tkinter tidak tersedia
+
+    cv2.resizeWindow(window_name, screen_w, screen_h)
+    cv2.moveWindow(window_name, 0, 0)
+    cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
     try:
         while cap.isOpened():
             success, frame = cap.read()
