@@ -1,25 +1,35 @@
 """
-dobot_gesture_control_v2.py
+dobot_gesture_control_v2.py  (satu file, mandiri -- tidak butuh file lain)
 
-Perbaikan dari versi sebelumnya:
-1. AUTO-DETECT PORT: scan semua serial port yang tersedia, coba konek satu per satu
-   sampai ketemu yang benar-benar Dobot -- tidak perlu edit DOBOT_PORT manual lagi.
-   Ada juga thread background yang otomatis mencoba reconnect kalau koneksi putus.
+Alur saat dijalankan:
+1. Connect ke Dobot (auto-detect port, scan semua serial port yang tersedia).
+2. Jalankan HOMING (~20 detik) -- WAJIB selesai dulu sebelum lanjut.
+3. Baru setelah itu kamera dibuka dan mulai scan gesture tangan.
+
+Kalau Dobot gagal konek di awal, script tetap lanjut buka kamera (supaya gesture
+tetap bisa dites), tapi kontrol Dobot baru aktif setelah background-reconnect
+berhasil nyambung -- di reconnect ini TIDAK homing ulang, cuma buka koneksi baru
+(kalibrasi homing tersimpan di firmware Dobot selama tidak mati listrik).
+
+Fitur-fitur yang tetap dipakai:
+1. AUTO-DETECT PORT: scan semua serial port yang tersedia, coba konek satu per
+   satu -- tidak perlu edit port manual lagi.
 2. REGION DETEKSI LEBIH STABIL:
    - Smoothing posisi wrist (rata-rata beberapa frame terakhir) supaya tidak jitter.
    - Hysteresis per-zona: ambang untuk MASUK zona dan KELUAR zona dibedakan,
      jadi gesture tidak "flicker" pas tangan pas di garis batas.
+3. CONVEYOR & SUCTION TOGGLE: 1 jari / 2 jari nyala-matiin bergantian (bukan nyala
+   terus), kepal (0 jari) jadi tombol emergency stop untuk keduanya.
 """
 
 import time
 import logging
 import threading
 from collections import deque
-from typing import Optional
+from serial.tools import list_ports
 
 import cv2
 import mediapipe as mp
-from serial.tools import list_ports
 
 try:
     from pydobotplus import Dobot
@@ -30,20 +40,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("dobot-gesture")
 
 # ---------------------------------------------------------------------------
-# Konfigurasi Gerak & Dobot
+# Konfigurasi Koneksi Dobot
 # ---------------------------------------------------------------------------
-STEP_XY_MM = 20.0
-STEP_Z_MM = 20.0
 DEFAULT_VELOCITY = 100.0
 DEFAULT_ACCELERATION = 100.0
-CONVEYOR_SPEED = 0.5
-
-COMMAND_COOLDOWN_S = 0.4
-RECONNECT_INTERVAL_S = 5   # jeda antar percobaan auto-reconnect saat koneksi putus
 
 # Kata kunci untuk mengenali kandidat port Dobot lebih dulu (dicoba paling awal).
 # Kalau tidak ada yang cocok, semua port lain tetap akan dicoba juga.
 PORT_HINT_KEYWORDS = ["dobot", "cp210", "ch340", "silicon labs", "usb-serial", "usb serial"]
+
+# ---------------------------------------------------------------------------
+# Konfigurasi Gerak & Dobot
+# ---------------------------------------------------------------------------
+STEP_XY_MM = 20.0
+STEP_Z_MM = 20.0
+CONVEYOR_SPEED = 0.5
+
+COMMAND_COOLDOWN_S = 0.4
+RECONNECT_INTERVAL_S = 5   # jeda antar percobaan auto-reconnect saat koneksi putus
 
 GESTURE_TO_JOG = {
     "Gerakan ke Kiri":  ("y", "left"),
@@ -79,7 +93,7 @@ HAND_LOST_GRACE_S = 0.4  # kalau tangan hilang sebentar (mediapipe miss), state 
 
 
 # ---------------------------------------------------------------------------
-# Auto-detect & kelola koneksi Dobot
+# Kelola koneksi Dobot (auto-detect port)
 # ---------------------------------------------------------------------------
 def list_candidate_ports():
     """Urutkan port: yang match keyword Dobot/USB-serial duluan, sisanya menyusul."""
@@ -94,6 +108,64 @@ def list_candidate_ports():
     return hinted + others
 
 
+def connect_dobot(max_attempts_per_port: int = 2, retry_delay_s: float = 0.8):
+    """Auto-scan semua serial port dan coba konek ke Dobot.
+
+    Return:
+        Instance Dobot yang sudah terhubung (siap dipakai), atau None kalau gagal.
+    """
+    if Dobot is None:
+        log.error("pydobotplus belum terinstall. Jalankan: pip install pydobotplus")
+        return None
+
+    candidates = list_candidate_ports()
+    if not candidates:
+        log.warning("Tidak ada serial port terdeteksi sama sekali. "
+                    "Pastikan kabel USB Dobot terpasang.")
+        return None
+
+    log.info("Port yang terdeteksi: %s", candidates)
+
+    for port in candidates:
+        # Coba tiap port sampai beberapa kali dengan jeda singkat -- kadang
+        # percobaan pertama gagal handshake hanya karena device baru saja
+        # di-plug dan belum 'settle', bukan berarti port itu salah.
+        for attempt in range(1, max_attempts_per_port + 1):
+            device = None
+            try:
+                log.info("Mencoba menghubungkan ke Dobot di %s (percobaan %d)...", port, attempt)
+                device = Dobot(port=port)
+                device.speed(DEFAULT_VELOCITY, DEFAULT_ACCELERATION)
+                log.info("Dobot terhubung di port: %s", port)
+                return device
+            except Exception as exc:
+                log.warning("Gagal konek ke %s (percobaan %d): [%s] %r",
+                            port, attempt, type(exc).__name__, str(exc))
+                # Tutup handle yang mungkin sudah terbuka separuh, supaya port
+                # tidak 'terkunci' dan bisa dicoba lagi / dipakai percobaan berikutnya.
+                if device is not None:
+                    try:
+                        device.close()
+                    except Exception:
+                        try:
+                            device._ser.close()
+                        except Exception:
+                            pass
+                time.sleep(retry_delay_s)
+
+    log.warning("Dobot tidak ditemukan/gagal dikonek di %d port yang dicoba: %s",
+                len(candidates), candidates)
+    return None
+
+
+def get_device_port(device) -> str:
+    """Ambil nama port aktual dari instance Dobot yang sudah terhubung (untuk ditampilkan di UI/log)."""
+    try:
+        return device._ser.port
+    except Exception:
+        return "unknown"
+
+
 class DobotController:
     def __init__(self):
         self.device = None
@@ -104,58 +176,39 @@ class DobotController:
         self._lock = threading.RLock()
 
     def connect(self) -> bool:
-        """Coba konek ke Dobot dengan auto-scan semua port yang mungkin."""
-        if Dobot is None:
-            log.error("pydobotplus belum terinstall. Jalankan: pip install pydobotplus")
-            return False
-
+        """Buka koneksi serial baru ke Dobot (auto-detect port)."""
         with self._lock:
             if self.connected:
                 return True
 
-            candidates = list_candidate_ports()
-            if not candidates:
-                log.warning("Tidak ada serial port terdeteksi sama sekali. "
-                            "Pastikan kabel USB Dobot terpasang.")
+            device = connect_dobot()
+            if device is None:
                 return False
 
-            log.info("Port yang terdeteksi: %s", candidates)
+            self.device = device
+            self.port = get_device_port(device)
+            self.connected = True
+            return True
 
-            for port in candidates:
-                # Coba tiap port sampai 2x dengan jeda singkat. Ini penting karena
-                # kadang percobaan pertama gagal handshake hanya karena device baru
-                # saja di-plug dan belum 'settle' -- bukan berarti port itu salah.
-                for attempt in range(1, 3):
-                    device = None
-                    try:
-                        log.info("Mencoba menghubungkan ke Dobot di %s (percobaan %d)...", port, attempt)
-                        device = Dobot(port=port)
-                        device.speed(DEFAULT_VELOCITY, DEFAULT_ACCELERATION)
-                        self.device = device
-                        self.port = port
-                        self.connected = True
-                        log.info("Dobot terhubung di port: %s", port)
-                        return True
-                    except Exception as exc:
-                        log.warning("Gagal konek ke %s (percobaan %d): [%s] %r",
-                                    port, attempt, type(exc).__name__, str(exc))
-                        # PENTING: tutup handle yang mungkin sudah terbuka separuh,
-                        # supaya port tidak 'terkunci' dan bisa dicoba lagi / dipakai
-                        # port scan berikutnya. Tanpa ini, satu kegagalan bisa bikin
-                        # semua percobaan setelahnya ikut gagal walau portnya benar.
-                        if device is not None:
-                            try:
-                                device.close()
-                            except Exception:
-                                try:
-                                    device._ser.close()  # fallback kalau .close() gak ada
-                                except Exception:
-                                    pass
-                        time.sleep(0.8)
-
-            log.warning("Dobot tidak ditemukan/gagal dikonek di %d port yang dicoba: %s",
-                        len(candidates), candidates)
-            return False
+    def do_homing(self, wait_seconds: int = 20) -> bool:
+        """Jalankan proses homing fisik Dobot. Dipanggil SEKALI di awal main(),
+        SEBELUM kamera dibuka -- supaya robot benar-benar di posisi nol dulu
+        sebelum menerima perintah gerak dari gesture."""
+        with self._lock:
+            if not self.connected or self.device is None:
+                log.warning("Tidak bisa homing: Dobot belum terhubung.")
+                return False
+            try:
+                log.info("Memulai proses Homing. Pastikan area sekitar robot KOSONG!")
+                self.device.home()
+                log.info("Menunggu homing selesai (%d detik)...", wait_seconds)
+                time.sleep(wait_seconds)
+                log.info("Homing selesai. Dobot siap menerima perintah gesture.")
+                return True
+            except Exception as exc:
+                log.warning("Homing gagal: [%s] %r", type(exc).__name__, str(exc))
+                self._mark_disconnected(exc)
+                return False
 
     def disconnect(self):
         with self._lock:
@@ -251,7 +304,12 @@ def classify_zone(wrist_x: float, wrist_y: float, current_zone: str) -> str:
 # ---------------------------------------------------------------------------
 def main():
     dobot = DobotController()
-    dobot.connect()  # coba konek langsung di awal
+
+    if dobot.connect():
+        dobot.do_homing()  # WAJIB selesai dulu sebelum kamera & gesture scanning dimulai
+    else:
+        log.warning("Dobot tidak terhubung di awal -- lanjut tanpa homing. "
+                    "Kamera & gesture tetap aktif, kontrol Dobot menunggu auto-reconnect.")
 
     stop_event = threading.Event()
     reconnect_thread = threading.Thread(
@@ -268,7 +326,7 @@ def main():
         min_tracking_confidence=0.5,
     )
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
     tip_ids = [4, 8, 12, 16, 20]
 
     last_jog_time = 0.0
