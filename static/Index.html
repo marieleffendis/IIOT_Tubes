@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="Index.css">
+        <title>Dobot Dashboard</title>
+    </head>
+    <body>
+        <header>
+            <p class="header-eyebrow">Robotic Arm Control System</p>
+            <h1>Dobot Dashboard</h1>
+        </header>
+        <main>
+            <section class="motion_control">
+                <div class="panel-heading">
+                    <h2>Motion Control</h2>
+                    <span class="panel-heading-sub">Manual Override</span>
+                </div>
+                <div class="pose-readout" id="poseReadout">Posisi: X --.-&nbsp;&nbsp;Y --.-&nbsp;&nbsp;Z --.-</div>
+
+                <div class="axis-control X-Axis" data-axis="x">
+                    <span class="axis-tag">X</span>
+                    <p>X-Axis Motion</p>
+                    <div class="button-group">
+                        <button data-direction="forward"><span class="chevron">◀</span>Depan</button>
+                        <button data-direction="backward">Belakang<span class="chevron">▶</span></button>
+                    </div>
+                </div>
+
+                <div class="axis-control Y-Axis" data-axis="y">
+                    <span class="axis-tag">Y</span>
+                    <p>Y-Axis Motion</p>
+                    <div class="button-group">
+                        <button data-direction="left"><span class="chevron">◀</span>Kiri</button>
+                        <button data-direction="right">Kanan<span class="chevron">▶</span></button>
+                    </div>
+                </div>
+
+                <div class="axis-control Z-Axis" data-axis="z">
+                    <span class="axis-tag">Z</span>
+                    <p>Z-Axis Motion</p>
+                    <div class="button-group">
+                        <button data-direction="up"><span class="chevron">▲</span>Atas</button>
+                        <button data-direction="down">Bawah<span class="chevron">▼</span></button>
+                    </div>
+                </div>
+
+                <div class="axis-control Suction" data-axis="suction">
+                    <span class="axis-tag">S</span>
+                    <p>Suction Motion</p>
+                    <div class="button-group toggle-group">
+                        <button class="btn-on">Hidup</button>
+                        <button class="btn-off">Mati</button>
+                    </div>
+                </div>
+
+                <div class="axis-control Conveyor" data-axis="conveyor">
+                    <span class="axis-tag">C</span>
+                    <p>Conveyor Motion</p>
+                    <div class="button-group toggle-group">
+                        <button class="btn-on">Hidup</button>
+                        <button class="btn-off">Mati</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="footer-content">
+                <div class="footer-status">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Dobot Tidak Terhubung</span>
+                    <button id="reconnectBtn" class="reconnect-btn" type="button">Sambungkan</button>
+                </div>
+
+                <div class="footer-brand">
+                    <p>Dobot</p>
+                    <span>Enjoy Your Moment</span>
+                </div>
+            </div>
+            <p class="footer-copyright">&copy; 2026 Dobot Dashboard. Semua hak dilindungi.</p>
+        </footer>
+
+        <script src="Index.js"></script>
+    </body>
+</html>
