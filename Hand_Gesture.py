@@ -115,24 +115,46 @@ class DobotController:
 
             candidates = list_candidate_ports()
             if not candidates:
-                log.warning("Tidak ada serial port terdeteksi sama sekali.")
+                log.warning("Tidak ada serial port terdeteksi sama sekali. "
+                            "Pastikan kabel USB Dobot terpasang.")
                 return False
 
-            for port in candidates:
-                try:
-                    log.info("Mencoba menghubungkan ke Dobot di %s ...", port)
-                    device = Dobot(port=port)
-                    device.speed(DEFAULT_VELOCITY, DEFAULT_ACCELERATION)
-                    self.device = device
-                    self.port = port
-                    self.connected = True
-                    log.info("Dobot terhubung di port: %s", port)
-                    return True
-                except Exception as exc:
-                    log.debug("Gagal di %s: %s", port, exc)
-                    continue
+            log.info("Port yang terdeteksi: %s", candidates)
 
-            log.warning("Dobot tidak ditemukan di port manapun (%d port dicoba).", len(candidates))
+            for port in candidates:
+                # Coba tiap port sampai 2x dengan jeda singkat. Ini penting karena
+                # kadang percobaan pertama gagal handshake hanya karena device baru
+                # saja di-plug dan belum 'settle' -- bukan berarti port itu salah.
+                for attempt in range(1, 3):
+                    device = None
+                    try:
+                        log.info("Mencoba menghubungkan ke Dobot di %s (percobaan %d)...", port, attempt)
+                        device = Dobot(port=port)
+                        device.speed(DEFAULT_VELOCITY, DEFAULT_ACCELERATION)
+                        self.device = device
+                        self.port = port
+                        self.connected = True
+                        log.info("Dobot terhubung di port: %s", port)
+                        return True
+                    except Exception as exc:
+                        log.warning("Gagal konek ke %s (percobaan %d): [%s] %r",
+                                    port, attempt, type(exc).__name__, str(exc))
+                        # PENTING: tutup handle yang mungkin sudah terbuka separuh,
+                        # supaya port tidak 'terkunci' dan bisa dicoba lagi / dipakai
+                        # port scan berikutnya. Tanpa ini, satu kegagalan bisa bikin
+                        # semua percobaan setelahnya ikut gagal walau portnya benar.
+                        if device is not None:
+                            try:
+                                device.close()
+                            except Exception:
+                                try:
+                                    device._ser.close()  # fallback kalau .close() gak ada
+                                except Exception:
+                                    pass
+                        time.sleep(0.8)
+
+            log.warning("Dobot tidak ditemukan/gagal dikonek di %d port yang dicoba: %s",
+                        len(candidates), candidates)
             return False
 
     def disconnect(self):
@@ -246,7 +268,7 @@ def main():
         min_tracking_confidence=0.5,
     )
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1)
     tip_ids = [4, 8, 12, 16, 20]
 
     last_jog_time = 0.0
@@ -260,6 +282,7 @@ def main():
     last_gerakan_robot = "Diam"
     last_posisi_tangan = "Diam"
     last_fingers_count = 0
+    prev_fingers_count = -1  # dipakai buat deteksi transisi gesture (biar toggle, bukan hold)
 
     window_name = "Hand Gesture -> Dobot Control (v2: Auto Port + Stable Zone)"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -353,13 +376,17 @@ def main():
                         current_zone = "Diam (Tengah)"  # reset hysteresis saat keluar mode navigasi
 
                         if fingers_count == 1:
-                            dobot.set_conveyor(True)
-                            dobot.set_suction(False)
-                            gerakan_robot = "Conveyor Hidup (1 Jari)"
+                            # Toggle: cuma switch ON/OFF pas BARU masuk gesture 1 jari
+                            # (transisi dari jumlah jari lain), bukan tiap frame selama
+                            # dipegang -- kalau tidak, conveyor bakal nyala terus tanpa
+                            # bisa dimatikan lagi.
+                            if prev_fingers_count != 1:
+                                dobot.set_conveyor(not dobot.conveyor)
+                            gerakan_robot = f"Conveyor {'ON' if dobot.conveyor else 'OFF'} (1 Jari)"
                         elif fingers_count == 2:
-                            dobot.set_suction(True)
-                            dobot.set_conveyor(False)
-                            gerakan_robot = "Suction Hidup (2 Jari)"
+                            if prev_fingers_count != 2:
+                                dobot.set_suction(not dobot.suction)
+                            gerakan_robot = f"Suction {'ON' if dobot.suction else 'OFF'} (2 Jari)"
                         elif fingers_count == 3:
                             gerakan_robot = "Gerakan ke Depan (3 Jari)"
                             if (now - last_fb_time) > COMMAND_COOLDOWN_S:
@@ -371,9 +398,13 @@ def main():
                                 dobot.move_forward_backward(forward=False)
                                 last_fb_time = now
                         else:
-                            gerakan_robot = "Diam (Mengepal)"
+                            # Tangan mengepal = tombol emergency stop, matikan
+                            # kedua aktuator sekaligus tidak peduli status sebelumnya.
+                            gerakan_robot = "Stop Semua Aktuator (Mengepal)"
                             dobot.set_suction(False)
                             dobot.set_conveyor(False)
+
+                        prev_fingers_count = fingers_count
             else:
                 # Tangan tidak terdeteksi sesaat (mediapipe miss) -> pertahankan state
                 # terakhir selama masih dalam grace period, biar tidak "kedip" ke Diam.
@@ -384,6 +415,7 @@ def main():
                     current_zone = "Diam (Tengah)"
                     wrist_x_buf.clear()
                     wrist_y_buf.clear()
+                    prev_fingers_count = -1
                 else:
                     fingers_count = last_fingers_count
                     posisi_tangan = last_posisi_tangan
@@ -410,7 +442,8 @@ def main():
 
             cv2.imshow(window_name, image)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q') or key == 27:  # 27 = kode tombol Esc
                 break
     finally:
         stop_event.set()
