@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initAxisButtons();
     initToggleButtons();
     initReconnectButton();
+    initHomeButton();
 
     refreshStatus();
     setInterval(refreshStatus, STATUS_POLL_MS);
@@ -101,6 +102,40 @@ function initReconnectButton() {
     });
 }
 
+// --- Home ulang manual (POST /api/home) ---------------------------------
+function initHomeButton() {
+    const btn = document.getElementById('homeBtn');
+    if (!btn) return;
+
+    btn.addEventListener('click', async () => {
+        const confirmed = window.confirm(
+            'Jalankan homing ulang? Pastikan area sekitar lengan robot kosong. Proses ini memakan waktu ±20 detik.'
+        );
+        if (!confirmed) return;
+
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = 'Homing...';
+        try {
+            const res = await fetch('/api/home', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ force: true }),
+            });
+            const data = await res.json();
+            applyStatus(data);
+            if (!data.ok) {
+                console.warn('Homing gagal:', data.error);
+            }
+        } catch (err) {
+            console.error('Gagal memicu homing:', err);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    });
+}
+
 async function refreshStatus() {
     try {
         const res = await fetch('/api/status');
@@ -114,6 +149,30 @@ async function refreshStatus() {
 function applyStatus(data) {
     setConnectionStatus(!!data.connected);
     if (data.pose) updatePoseReadout(data.pose);
+    updateHomingBanner(!!data.homing);
+    setControlsLocked(!!data.homing);
+}
+
+function updateHomingBanner(isHoming) {
+    const banner = document.getElementById('homingBanner');
+    if (!banner) return;
+    banner.classList.toggle('is-active', isHoming);
+}
+
+// Kunci semua tombol jog/suction/conveyor selagi robot fisik sedang homing,
+// supaya tidak ada perintah gerak lain yang bentrok dengan proses homing.
+function setControlsLocked(locked) {
+    document
+        .querySelectorAll(
+            '.axis-control[data-axis="x"] button, ' +
+            '.axis-control[data-axis="y"] button, ' +
+            '.axis-control[data-axis="z"] button, ' +
+            '.axis-control[data-axis="suction"] button, ' +
+            '.axis-control[data-axis="conveyor"] button'
+        )
+        .forEach((btn) => {
+            btn.disabled = locked;
+        });
 }
 
 function setConnectionStatus(isConnected) {

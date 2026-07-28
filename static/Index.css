@@ -142,6 +142,44 @@ section.motion_control {
     cursor: default;
 }
 
+.homing-banner {
+    display: none;
+    align-items: center;
+    gap: 0.55rem;
+    background-color: #fef6e7;
+    border: 1px solid var(--axis-z);
+    border-radius: 8px;
+    padding: 0.55rem 0.9rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    color: #8a5a05;
+}
+
+.homing-banner.is-active {
+    display: flex;
+}
+
+.homing-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--axis-z);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
+    animation: homing-pulse 1s ease-in-out infinite;
+}
+
+@keyframes homing-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .homing-dot {
+        animation: none;
+    }
+}
+
 .axis-control {
     display: flex;
     align-items: center;
@@ -225,6 +263,13 @@ section.motion_control {
 .axis-control button:active {
     transform: translateY(0);
     box-shadow: inset 0 2px 4px rgba(18, 34, 45, 0.12);
+}
+
+.axis-control button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 .X-Axis button:hover, .Y-Axis button:hover { color: var(--axis-x); }
