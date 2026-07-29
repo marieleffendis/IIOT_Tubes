@@ -1,30 +1,7 @@
-"""
-dobot_gesture_control_v2.py  (satu file, mandiri -- tidak butuh file lain)
-
-Alur saat dijalankan:
-1. Connect ke Dobot (auto-detect port, scan semua serial port yang tersedia).
-2. Jalankan HOMING (~20 detik) -- WAJIB selesai dulu sebelum lanjut.
-3. Baru setelah itu kamera dibuka dan mulai scan gesture tangan.
-
-Kalau Dobot gagal konek di awal, script tetap lanjut buka kamera (supaya gesture
-tetap bisa dites), tapi kontrol Dobot baru aktif setelah background-reconnect
-berhasil nyambung -- di reconnect ini TIDAK homing ulang, cuma buka koneksi baru
-(kalibrasi homing tersimpan di firmware Dobot selama tidak mati listrik).
-
-Fitur-fitur yang tetap dipakai:
-1. AUTO-DETECT PORT: scan semua serial port yang tersedia, coba konek satu per
-   satu -- tidak perlu edit port manual lagi.
-2. REGION DETEKSI LEBIH STABIL:
-   - Smoothing posisi wrist (rata-rata beberapa frame terakhir) supaya tidak jitter.
-   - Hysteresis per-zona: ambang untuk MASUK zona dan KELUAR zona dibedakan,
-     jadi gesture tidak "flicker" pas tangan pas di garis batas.
-3. CONVEYOR & SUCTION TOGGLE: 1 jari / 2 jari nyala-matiin bergantian (bukan nyala
-   terus), kepal (0 jari) jadi tombol emergency stop untuk keduanya.
-"""
-
 import time
 import logging
 import threading
+import queue
 from collections import deque
 from serial.tools import list_ports
 
@@ -78,9 +55,6 @@ AXIS_DIRECTIONS = {
 # ---------------------------------------------------------------------------
 # Konfigurasi Zona Navigasi (5 jari) -- dengan Hysteresis
 # ---------------------------------------------------------------------------
-# ENTER = ambang untuk mulai masuk ke zona itu
-# EXIT  = ambang untuk keluar dari zona itu (dibuat lebih longgar dari ENTER)
-# Selisih ENTER-EXIT ini yang bikin gesture tidak flicker di garis batas.
 ZONE = {
     "left":   {"enter": 0.30, "exit": 0.36},   # wrist_x < enter -> masuk KIRI
     "right":  {"enter": 0.70, "exit": 0.64},   # wrist_x > enter -> masuk KANAN
@@ -90,6 +64,14 @@ ZONE = {
 
 SMOOTHING_WINDOW = 5   # jumlah frame terakhir yang dirata-rata untuk posisi wrist
 HAND_LOST_GRACE_S = 0.4  # kalau tangan hilang sebentar (mediapipe miss), state gesture tetap dipertahankan
+
+# ---------------------------------------------------------------------------
+# Konfigurasi Kamera & Performa
+# ---------------------------------------------------------------------------
+CAMERA_INDEX = 1
+CAMERA_WIDTH = 640
+CAMERA_HEIGHT = 480
+PRINT_EVERY_N_FRAMES = 10   # throttle log terminal supaya tidak jadi bottleneck
 
 
 # ---------------------------------------------------------------------------
@@ -127,9 +109,6 @@ def connect_dobot(max_attempts_per_port: int = 2, retry_delay_s: float = 0.8):
     log.info("Port yang terdeteksi: %s", candidates)
 
     for port in candidates:
-        # Coba tiap port sampai beberapa kali dengan jeda singkat -- kadang
-        # percobaan pertama gagal handshake hanya karena device baru saja
-        # di-plug dan belum 'settle', bukan berarti port itu salah.
         for attempt in range(1, max_attempts_per_port + 1):
             device = None
             try:
@@ -141,8 +120,6 @@ def connect_dobot(max_attempts_per_port: int = 2, retry_delay_s: float = 0.8):
             except Exception as exc:
                 log.warning("Gagal konek ke %s (percobaan %d): [%s] %r",
                             port, attempt, type(exc).__name__, str(exc))
-                # Tutup handle yang mungkin sudah terbuka separuh, supaya port
-                # tidak 'terkunci' dan bisa dicoba lagi / dipakai percobaan berikutnya.
                 if device is not None:
                     try:
                         device.close()
@@ -167,6 +144,15 @@ def get_device_port(device) -> str:
 
 
 class DobotController:
+    """
+    Semua perintah gerak/aktuator yang dipanggil dari video loop TIDAK
+    langsung bicara ke serial port. Mereka cuma `put()` ke cmd_queue dan
+    balik lagi ke video loop dengan hampir tanpa delay. Worker thread
+    (_process_commands) yang mengeksekusi command satu-satu ke Dobot di
+    background, jadi berapa pun lama request-response serial-nya, video
+    loop tidak pernah ikut nunggu.
+    """
+
     def __init__(self):
         self.device = None
         self.connected = False
@@ -175,6 +161,40 @@ class DobotController:
         self.conveyor = False
         self._lock = threading.RLock()
 
+        self.cmd_queue = queue.Queue()
+        self._stop_worker = threading.Event()
+        self._worker_thread = threading.Thread(
+            target=self._process_commands, daemon=True
+        )
+        self._worker_thread.start()
+
+    # --- Worker thread: eksekusi command serial di background ---
+    def _process_commands(self):
+        while not self._stop_worker.is_set():
+            try:
+                fn, args = self.cmd_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            try:
+                fn(*args)
+            except Exception as exc:
+                log.warning("Command worker error: [%s] %r", type(exc).__name__, str(exc))
+            finally:
+                self.cmd_queue.task_done()
+
+    def wait_queue_empty(self, timeout: float = 2.0):
+        """Blok sebentar sampai semua command di queue selesai diproses --
+        dipanggil saat shutdown supaya perintah suction/conveyor OFF
+        terakhir sempat benar-benar terkirim ke Dobot sebelum disconnect."""
+        start = time.time()
+        while not self.cmd_queue.empty() and (time.time() - start) < timeout:
+            time.sleep(0.05)
+
+    def shutdown_worker(self):
+        self._stop_worker.set()
+        self._worker_thread.join(timeout=2)
+
+    # --- Koneksi (dipanggil dari main thread saat start, dan dari reconnect thread) ---
     def connect(self) -> bool:
         """Buka koneksi serial baru ke Dobot (auto-detect port)."""
         with self._lock:
@@ -222,20 +242,26 @@ class DobotController:
 
     def _mark_disconnected(self, exc: Exception):
         log.warning("Koneksi ke Dobot terputus (%s): %s", self.port, exc)
-        self.device = None
-        self.connected = False
-        self.port = None
+        with self._lock:
+            self.device = None
+            self.connected = False
+            self.port = None
 
+    # --- API non-blocking, aman dipanggil dari video loop tiap frame ---
     def jog(self, axis: str, direction: str):
-        if not self.connected or self.device is None:
+        if (axis, direction) not in AXIS_DIRECTIONS:
             return
-        key = (axis, direction)
-        if key not in AXIS_DIRECTIONS:
-            return
-        dx, dy, dz = AXIS_DIRECTIONS[key]
+        self.cmd_queue.put((self._do_jog, (axis, direction)))
+
+    def _do_jog(self, axis: str, direction: str):
+        with self._lock:
+            if not self.connected or self.device is None:
+                return
+            device = self.device
+        dx, dy, dz = AXIS_DIRECTIONS[(axis, direction)]
         step = STEP_Z_MM if axis == "z" else STEP_XY_MM
         try:
-            self.device.move_rel(x=dx * step, y=dy * step, z=dz * step, r=0, wait=False)
+            device.move_rel(x=dx * step, y=dy * step, z=dz * step, r=0, wait=False)
         except Exception as exc:
             self._mark_disconnected(exc)
 
@@ -243,20 +269,34 @@ class DobotController:
         self.jog("x", "forward" if forward else "backward")
 
     def set_suction(self, enable: bool):
-        if not self.connected or self.device is None or self.suction == enable:
+        if self.suction == enable:
             return
+        self.cmd_queue.put((self._send_suction, (enable,)))
+
+    def _send_suction(self, enable: bool):
+        with self._lock:
+            if not self.connected or self.device is None:
+                return
+            device = self.device
         try:
-            self.device.suck(enable)
+            device.suck(enable)
             self.suction = enable
             log.info("Suction: %s", "ON" if enable else "OFF")
         except Exception as exc:
             self._mark_disconnected(exc)
 
     def set_conveyor(self, enable: bool, speed: float = CONVEYOR_SPEED):
-        if not self.connected or self.device is None or self.conveyor == enable:
+        if self.conveyor == enable:
             return
+        self.cmd_queue.put((self._send_conveyor, (enable, speed)))
+
+    def _send_conveyor(self, enable: bool, speed: float):
+        with self._lock:
+            if not self.connected or self.device is None:
+                return
+            device = self.device
         try:
-            self.device.conveyor_belt(speed=speed if enable else 0.0, direction=1)
+            device.conveyor_belt(speed=speed if enable else 0.0, direction=1)
             self.conveyor = enable
             log.info("Conveyor: %s", "ON" if enable else "OFF")
         except Exception as exc:
@@ -286,8 +326,6 @@ def classify_zone(wrist_x: float, wrist_y: float, current_zone: str) -> str:
             return value_below < thresh
         return value_above > thresh
 
-    # Prioritas: Atas dan Bawah dicek dulu (area vertikal lebih luas & lebih sering dipakai),
-    # baru Kiri/Kanan.
     if in_zone("top", value_below=wrist_y):
         return "Gerakan ke Atas"
     if in_zone("bottom", value_above=wrist_y):
@@ -322,11 +360,20 @@ def main():
     hands = mp_hands.Hands(
         static_image_mode=False,
         max_num_hands=1,
+        model_complexity=0,   # lite model -- jauh lebih ringan per frame dibanding default (1)
         min_detection_confidence=0.7,
         min_tracking_confidence=0.5,
     )
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(CAMERA_INDEX)
+    # Paksa MJPG + resolusi kecil + buffer minim: mengurangi bandwidth USB dan
+    # mencegah OpenCV menumpuk frame lama di buffer (yang bikin delay makin
+    # "ngaret" kalau proses MediaPipe lebih lambat dari capture rate).
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
     tip_ids = [4, 8, 12, 16, 20]
 
     last_jog_time = 0.0
@@ -341,13 +388,11 @@ def main():
     last_posisi_tangan = "Diam"
     last_fingers_count = 0
     prev_fingers_count = -1  # dipakai buat deteksi transisi gesture (biar toggle, bukan hold)
+    frame_count = 0
 
-    window_name = "Hand Gesture -> Dobot Control (v2: Auto Port + Stable Zone)"
+    window_name = "Hand Gesture -> Dobot Control (v3: Async Command Queue)"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-    # cv2.WND_PROP_FULLSCREEN saja seringkali tidak dihormati oleh window manager
-    # di Linux (mis. GNOME). Fix: paksa resize window ke ukuran layar + pindah ke (0,0)
-    # dulu, baru set properti fullscreen -- kombinasi ini jauh lebih konsisten.
     try:
         import tkinter
         _root = tkinter.Tk()
@@ -368,6 +413,7 @@ def main():
                 print("Gagal membaca frame dari kamera.")
                 break
 
+            frame_count += 1
             frame = cv2.flip(frame, 1)
             h, w, _ = frame.shape
 
@@ -377,7 +423,6 @@ def main():
             image.flags.writeable = True
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-            # --- Gambar garis batas zona (pakai ambang "enter" sebagai referensi visual) ---
             x_left = int(w * ZONE["left"]["enter"])
             x_right = int(w * ZONE["right"]["enter"])
             y_top = int(h * ZONE["top"]["enter"])
@@ -413,7 +458,6 @@ def main():
                     fingers_count = fingers.count(1)
                     last_hand_seen_time = now
 
-                    # --- Smoothing posisi wrist ---
                     wrist_x_buf.append(landmarks[0].x)
                     wrist_y_buf.append(landmarks[0].y)
                     wrist_x = sum(wrist_x_buf) / len(wrist_x_buf)
@@ -426,18 +470,14 @@ def main():
 
                         if gerakan_robot in GESTURE_TO_JOG and (now - last_jog_time) > COMMAND_COOLDOWN_S:
                             axis, direction = GESTURE_TO_JOG[gerakan_robot]
-                            dobot.jog(axis, direction)
+                            dobot.jog(axis, direction)   # instan -- cuma masuk queue
                             last_jog_time = now
 
                     else:
                         posisi_tangan = "Kontrol Jari"
-                        current_zone = "Diam (Tengah)"  # reset hysteresis saat keluar mode navigasi
+                        current_zone = "Diam (Tengah)"
 
                         if fingers_count == 1:
-                            # Toggle: cuma switch ON/OFF pas BARU masuk gesture 1 jari
-                            # (transisi dari jumlah jari lain), bukan tiap frame selama
-                            # dipegang -- kalau tidak, conveyor bakal nyala terus tanpa
-                            # bisa dimatikan lagi.
                             if prev_fingers_count != 1:
                                 dobot.set_conveyor(not dobot.conveyor)
                             gerakan_robot = f"Conveyor {'ON' if dobot.conveyor else 'OFF'} (1 Jari)"
@@ -456,16 +496,12 @@ def main():
                                 dobot.move_forward_backward(forward=False)
                                 last_fb_time = now
                         else:
-                            # Tangan mengepal = tombol emergency stop, matikan
-                            # kedua aktuator sekaligus tidak peduli status sebelumnya.
                             gerakan_robot = "Stop Semua Aktuator (Mengepal)"
                             dobot.set_suction(False)
                             dobot.set_conveyor(False)
 
                         prev_fingers_count = fingers_count
             else:
-                # Tangan tidak terdeteksi sesaat (mediapipe miss) -> pertahankan state
-                # terakhir selama masih dalam grace period, biar tidak "kedip" ke Diam.
                 if (now - last_hand_seen_time) > HAND_LOST_GRACE_S:
                     fingers_count = 0
                     posisi_tangan = "Diam"
@@ -484,9 +520,13 @@ def main():
             last_fingers_count = fingers_count
 
             status_koneksi = f"Terhubung ({dobot.port})" if dobot.connected else "Mencari Dobot..."
-            print(f"[DOBOT: {status_koneksi}] Aksi: {gerakan_robot} | Posisi: {posisi_tangan} | "
-                  f"Jari: {fingers_count} | Suction: {'ON' if dobot.suction else 'OFF'} | "
-                  f"Conveyor: {'ON' if dobot.conveyor else 'OFF'}")
+
+            # Log ke terminal di-throttle -- tidak tiap frame, supaya print()
+            # (I/O ke stdout) tidak ikut jadi sumber delay video.
+            if frame_count % PRINT_EVERY_N_FRAMES == 0:
+                print(f"[DOBOT: {status_koneksi}] Aksi: {gerakan_robot} | Posisi: {posisi_tangan} | "
+                      f"Jari: {fingers_count} | Suction: {'ON' if dobot.suction else 'OFF'} | "
+                      f"Conveyor: {'ON' if dobot.conveyor else 'OFF'}")
 
             cv2.putText(image, f"Aksi: {gerakan_robot}", (30, 40),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
@@ -507,6 +547,8 @@ def main():
         stop_event.set()
         dobot.set_suction(False)
         dobot.set_conveyor(False)
+        dobot.wait_queue_empty(timeout=2.0)   # kasih waktu command OFF terakhir sempat terkirim
+        dobot.shutdown_worker()
         dobot.disconnect()
         cap.release()
         cv2.destroyAllWindows()
