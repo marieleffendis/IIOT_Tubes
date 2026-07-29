@@ -2,6 +2,7 @@ import time
 import logging
 import threading
 import queue
+import platform
 from collections import deque
 from serial.tools import list_ports
 
@@ -29,16 +30,19 @@ PORT_HINT_KEYWORDS = ["dobot", "cp210", "ch340", "silicon labs", "usb-serial", "
 # ---------------------------------------------------------------------------
 STEP_XY_MM = 20.0
 STEP_Z_MM = 20.0
+STEP_X_MM = 25.0
 CONVEYOR_SPEED = 0.5
 
 COMMAND_COOLDOWN_S = 0.4
 RECONNECT_INTERVAL_S = 5
 
 GESTURE_TO_JOG = {
-    "Gerakan ke Kiri":  ("y", "left"),
-    "Gerakan ke Kanan": ("y", "right"),
-    "Gerakan ke Atas":  ("z", "up"),
-    "Gerakan ke Bawah": ("z", "down"),
+    "Gerakan ke Kiri":     ("y", "left"),
+    "Gerakan ke Kanan":    ("y", "right"),
+    "Gerakan ke Atas":     ("z", "up"),
+    "Gerakan ke Bawah":    ("z", "down"),
+    "Gerakan ke Depan":    ("x", "forward"),
+    "Gerakan ke Belakang": ("x", "backward"),
 }
 
 AXIS_DIRECTIONS = {
@@ -51,58 +55,54 @@ AXIS_DIRECTIONS = {
 }
 
 # ---------------------------------------------------------------------------
-# Konfigurasi Zona Navigasi (5 jari) -- dengan Hysteresis
+# Konfigurasi Zona Navigasi (5 Jari)
 # ---------------------------------------------------------------------------
 ZONE = {
-    "left":   {"enter": 0.30, "exit": 0.36},
-    "right":  {"enter": 0.70, "exit": 0.64},
-    "top":    {"enter": 0.55, "exit": 0.62},
-    "bottom": {"enter": 0.75, "exit": 0.68},
+    "left":   {"enter": 0.35, "exit": 0.40},   
+    "right":  {"enter": 0.65, "exit": 0.60},   
+    "top":    {"enter": 0.40, "exit": 0.46},   
+    "bottom": {"enter": 0.60, "exit": 0.54},   
 }
 
-SMOOTHING_WINDOW = 5
+SMOOTHING_WINDOW = 7
 HAND_LOST_GRACE_S = 0.4
+STABILITY_THRESHOLD = 5
 
 # ---------------------------------------------------------------------------
 # Konfigurasi Kamera & Performa
 # ---------------------------------------------------------------------------
-CAMERA_INDEX = 1
+CAMERA_INDEX = 0
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
 PRINT_EVERY_N_FRAMES = 10
 
 
 # ---------------------------------------------------------------------------
-# Kelas CameraStream (Asynchronous Video Capture + Forced Resize)
+# Kelas CameraStream (Ultra-Low Latency + Thread-Safe untuk Orbbec)
 # ---------------------------------------------------------------------------
 class CameraStream:
-    """Membaca frame kamera di background thread dan memaksa resolusi turun agar tidak lag."""
     def __init__(self, src=0, width=640, height=480):
-        # Inisialisasi kamera. 
-        # TIPS: Jika masih ada isu komunikasi dengan Orbbec, Anda bisa menambahkan backend spesifik OS:
-        # Windows -> cv2.VideoCapture(src, cv2.CAP_DSHOW)
-        # Linux   -> cv2.VideoCapture(src, cv2.CAP_V4L2)
-        self.stream = cv2.VideoCapture(src)
-        
-        # Coba set konfigurasi ke kamera fisik (sering kali diabaikan oleh kamera resolusi tinggi)
+        if platform.system() == 'Windows':
+            self.stream = cv2.VideoCapture(src, cv2.CAP_DSHOW)
+        else:
+            self.stream = cv2.VideoCapture(src, cv2.CAP_V4L2)
+            
         self.stream.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self.stream.set(cv2.CAP_PROP_FPS, 30)
-        self.stream.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         self.target_width = width
         self.target_height = height
 
-        (self.grabbed, self.frame) = self.stream.read()
+        self.grabbed, self.frame = self.stream.read()
         if self.grabbed:
-            # Paksa resize pada frame pertama
             self.frame = cv2.resize(self.frame, (self.target_width, self.target_height))
             
         self.stopped = False
+        self.lock = threading.Lock()
 
     def start(self):
-        # Jalankan thread untuk membaca frame secara konstan
         threading.Thread(target=self.update, daemon=True).start()
         return self
 
@@ -111,16 +111,23 @@ class CameraStream:
             if not self.stream.isOpened():
                 break
             
-            grabbed, frame = self.stream.read()
+            grabbed = self.stream.grab()
             if grabbed:
-                # KUNCI OPTIMASI: Langsung perkecil gambar (resize) di thread I/O ini.
-                self.frame = cv2.resize(frame, (self.target_width, self.target_height))
-                self.grabbed = True
+                success, frame = self.stream.retrieve()
+                if success:
+                    frame = cv2.resize(frame, (self.target_width, self.target_height))
+                    with self.lock:
+                        self.frame = frame
+                        self.grabbed = True
             else:
-                self.grabbed = False
+                with self.lock:
+                    self.grabbed = False
 
     def read(self):
-        return self.grabbed, self.frame
+        with self.lock:
+            if self.frame is None:
+                return self.grabbed, None
+            return self.grabbed, self.frame.copy()
 
     def release(self):
         self.stopped = True
@@ -251,9 +258,18 @@ class DobotController:
             self.connected = False
             self.port = None
 
+    def clear_queue(self):
+        while not self.cmd_queue.empty():
+            try:
+                self.cmd_queue.get_nowait()
+                self.cmd_queue.task_done()
+            except queue.Empty:
+                break
+
     def jog(self, axis: str, direction: str):
         if (axis, direction) not in AXIS_DIRECTIONS:
             return
+        # Tidak membersihkan antrean agar perintah aktuator/suction tetap bisa diselipkan
         self.cmd_queue.put((self._do_jog, (axis, direction)))
 
     def _do_jog(self, axis: str, direction: str):
@@ -262,18 +278,21 @@ class DobotController:
                 return
             device = self.device
         dx, dy, dz = AXIS_DIRECTIONS[(axis, direction)]
-        step = STEP_Z_MM if axis == "z" else STEP_XY_MM
+        
+        if axis == "z":
+            step = STEP_Z_MM
+        elif axis == "x":
+            step = STEP_X_MM
+        else:
+            step = STEP_XY_MM
+
         try:
             device.move_rel(x=dx * step, y=dy * step, z=dz * step, r=0, wait=False)
         except Exception as exc:
             self._mark_disconnected(exc)
 
-    def move_forward_backward(self, forward: bool):
-        self.jog("x", "forward" if forward else "backward")
-
     def set_suction(self, enable: bool):
-        if self.suction == enable:
-            return
+        # Langsung masukkan ke antrean tanpa memutus gerakan sumbu/jogging
         self.cmd_queue.put((self._send_suction, (enable,)))
 
     def _send_suction(self, enable: bool):
@@ -288,8 +307,6 @@ class DobotController:
             self._mark_disconnected(exc)
 
     def set_conveyor(self, enable: bool, speed: float = CONVEYOR_SPEED):
-        if self.conveyor == enable:
-            return
         self.cmd_queue.put((self._send_conveyor, (enable, speed)))
 
     def _send_conveyor(self, enable: bool, speed: float):
@@ -349,17 +366,15 @@ def main():
         static_image_mode=False,
         max_num_hands=1,
         model_complexity=0,   
-        min_detection_confidence=0.7,
-        min_tracking_confidence=0.5,
+        min_detection_confidence=0.75,
+        min_tracking_confidence=0.6,
     )
 
-    # Inisialisasi kamera menggunakan CameraStream
     cap = CameraStream(src=CAMERA_INDEX, width=CAMERA_WIDTH, height=CAMERA_HEIGHT).start()
 
     tip_ids = [4, 8, 12, 16, 20]
 
-    last_jog_time = 0.0
-    last_fb_time = 0.0
+    last_action_time = 0.0
     current_zone = "Diam (Tengah)"
 
     wrist_x_buf = deque(maxlen=SMOOTHING_WINDOW)
@@ -368,8 +383,12 @@ def main():
     last_hand_seen_time = 0.0
     last_gerakan_robot = "Diam"
     last_posisi_tangan = "Diam"
-    last_fingers_count = 0
-    prev_fingers_count = -1  
+    
+    candidate_fingers = -1
+    consecutive_count = 0
+    stable_fingers_count = 0
+    prev_fingers_count = -1
+
     frame_count = 0
 
     window_name = "Hand Gesture -> Dobot Control"
@@ -414,7 +433,7 @@ def main():
             cv2.line(image, (0, y_bottom), (w, y_bottom), (0, 255, 255), 1, cv2.LINE_AA)
 
             now = time.time()
-            fingers_count = 0
+            raw_fingers_count = 0
             posisi_tangan = last_posisi_tangan
             gerakan_robot = last_gerakan_robot
 
@@ -436,7 +455,7 @@ def main():
                         else:
                             fingers.append(0)
 
-                    fingers_count = fingers.count(1)
+                    raw_fingers_count = fingers.count(1)
                     last_hand_seen_time = now
 
                     wrist_x_buf.append(landmarks[0].x)
@@ -444,44 +463,68 @@ def main():
                     wrist_x = sum(wrist_x_buf) / len(wrist_x_buf)
                     wrist_y = sum(wrist_y_buf) / len(wrist_y_buf)
 
+                    if raw_fingers_count == candidate_fingers:
+                        consecutive_count += 1
+                    else:
+                        candidate_fingers = raw_fingers_count
+                        consecutive_count = 1
+
+                    if consecutive_count >= STABILITY_THRESHOLD:
+                        stable_fingers_count = candidate_fingers
+
+                    fingers_count = stable_fingers_count
+
+                    # LOGIKA UTAMA GESTUR
                     if fingers_count == 5:
                         posisi_tangan = "Navigasi"
                         current_zone = classify_zone(wrist_x, wrist_y, current_zone)
                         gerakan_robot = current_zone
 
-                        if gerakan_robot in GESTURE_TO_JOG and (now - last_jog_time) > COMMAND_COOLDOWN_S:
+                        if gerakan_robot in GESTURE_TO_JOG and (now - last_action_time) > COMMAND_COOLDOWN_S:
                             axis, direction = GESTURE_TO_JOG[gerakan_robot]
                             dobot.jog(axis, direction)
-                            last_jog_time = now
+                            last_action_time = now
+                        prev_fingers_count = fingers_count
+
+                    elif fingers_count == 3:
+                        posisi_tangan = "Kontrol Maju/Mundur"
+                        gerakan_robot = "Gerakan ke Depan"
+                        if (now - last_action_time) > COMMAND_COOLDOWN_S:
+                            dobot.jog("x", "forward")
+                            last_action_time = now
+                        prev_fingers_count = fingers_count
+
+                    elif fingers_count == 4:
+                        posisi_tangan = "Kontrol Maju/Mundur"
+                        gerakan_robot = "Gerakan ke Belakang"
+                        if (now - last_action_time) > COMMAND_COOLDOWN_S:
+                            dobot.jog("x", "backward")
+                            last_action_time = now
+                        prev_fingers_count = fingers_count
 
                     else:
-                        posisi_tangan = "Kontrol Jari"
+                        posisi_tangan = "Kontrol Aktuator"
                         current_zone = "Diam (Tengah)"
 
-                        if fingers_count == 1:
-                            if prev_fingers_count != 1:
-                                dobot.set_conveyor(not dobot.conveyor)
-                            gerakan_robot = f"Conveyor {'ON' if dobot.conveyor else 'OFF'} (1 Jari)"
-                        elif fingers_count == 2:
-                            if prev_fingers_count != 2:
-                                dobot.set_suction(not dobot.suction)
-                            gerakan_robot = f"Suction {'ON' if dobot.suction else 'OFF'} (2 Jari)"
-                        elif fingers_count == 3:
-                            gerakan_robot = "Gerakan ke Depan (3 Jari)"
-                            if (now - last_fb_time) > COMMAND_COOLDOWN_S:
-                                dobot.move_forward_backward(forward=True)
-                                last_fb_time = now
-                        elif fingers_count == 4:
-                            gerakan_robot = "Gerakan ke Belakang (4 Jari)"
-                            if (now - last_fb_time) > COMMAND_COOLDOWN_S:
-                                dobot.move_forward_backward(forward=False)
-                                last_fb_time = now
-                        else:
-                            gerakan_robot = "Stop Semua Aktuator (Mengepal)"
-                            dobot.set_suction(False)
-                            dobot.set_conveyor(False)
+                        if fingers_count != prev_fingers_count and (now - last_action_time) > COMMAND_COOLDOWN_S:
+                            if fingers_count == 1:
+                                new_state = not dobot.conveyor
+                                dobot.set_conveyor(new_state)
+                                gerakan_robot = f"Conveyor {'ON' if new_state else 'OFF'} (Toggle)"
+                                last_action_time = now
+                            elif fingers_count == 2:
+                                # Suction Toggle: Bisa diubah statusnya kapan saja secara paralel
+                                new_state = not dobot.suction
+                                dobot.set_suction(new_state)
+                                gerakan_robot = f"Suction {'ON' if new_state else 'OFF'} (Paralel Toggle)"
+                                last_action_time = now
+                            elif fingers_count == 0:
+                                dobot.set_suction(False)
+                                dobot.set_conveyor(False)
+                                gerakan_robot = "Stop Semua Aktuator (Mengepal)"
+                                last_action_time = now
 
-                        prev_fingers_count = fingers_count
+                            prev_fingers_count = fingers_count
             else:
                 if (now - last_hand_seen_time) > HAND_LOST_GRACE_S:
                     fingers_count = 0
@@ -490,27 +533,29 @@ def main():
                     current_zone = "Diam (Tengah)"
                     wrist_x_buf.clear()
                     wrist_y_buf.clear()
+                    candidate_fingers = -1
+                    consecutive_count = 0
+                    stable_fingers_count = 0
                     prev_fingers_count = -1
                 else:
-                    fingers_count = last_fingers_count
+                    fingers_count = stable_fingers_count
                     posisi_tangan = last_posisi_tangan
                     gerakan_robot = last_gerakan_robot
 
             last_gerakan_robot = gerakan_robot
             last_posisi_tangan = posisi_tangan
-            last_fingers_count = fingers_count
 
             status_koneksi = f"Terhubung ({dobot.port})" if dobot.connected else "Mencari Dobot..."
 
             if frame_count % PRINT_EVERY_N_FRAMES == 0:
                 print(f"[DOBOT: {status_koneksi}] Aksi: {gerakan_robot} | Posisi: {posisi_tangan} | "
-                      f"Jari: {fingers_count} | Suction: {'ON' if dobot.suction else 'OFF'} | "
+                      f"Jari Stabil: {fingers_count} | Suction: {'ON' if dobot.suction else 'OFF'} | "
                       f"Conveyor: {'ON' if dobot.conveyor else 'OFF'}")
 
             cv2.putText(image, f"Aksi: {gerakan_robot}", (30, 40),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
             cv2.putText(image,
-                        f"Jari: {fingers_count} | Suc: {'ON' if dobot.suction else 'OFF'} | "
+                        f"Jari Stabil: {fingers_count} | Suc: {'ON' if dobot.suction else 'OFF'} | "
                         f"Conv: {'ON' if dobot.conveyor else 'OFF'}",
                         (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
             cv2.putText(image, f"Dobot: {status_koneksi}", (30, 120),
