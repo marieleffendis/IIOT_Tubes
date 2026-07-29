@@ -27,6 +27,12 @@ CONVEYOR_SPEED = 0.5        # Kecepatan default conveyor (0.0 - 1.0)
 RECONNECT_INTERVAL_S = 5    
 HOMING_DURATION_S = 20       # Jeda tunggu setelah home() dikirim ke Dobot (detik)
 
+# Kata kunci untuk mengenali kandidat port Dobot lebih dulu (dicoba paling awal
+# saat auto-detect). Kalau tidak ada yang cocok, port lain tetap dicoba juga.
+PORT_HINT_KEYWORDS = ["dobot", "cp210", "ch340", "silicon labs", "usb-serial", "usb serial"]
+PORT_CONNECT_MAX_ATTEMPTS = 2      # percobaan per port sebelum pindah ke port berikutnya
+PORT_CONNECT_RETRY_DELAY_S = 0.8   # jeda antar percobaan di port yang sama
+
 # Pemetaan perintah dari frontend JavaScript ke arah gerak relatif (dx, dy, dz)
 # Sesuaikan teks key ini jika label di tombol HTML Anda berbeda.
 # Pemetaan perintah dari frontend JavaScript (axis, direction) ke arah gerak relatif (dx, dy, dz)
@@ -71,6 +77,47 @@ class DobotManager:
     def list_ports(self):
         return [p.device for p in list_ports.comports()]
 
+    def _list_candidate_ports(self):
+        """Urutkan port: yang match keyword Dobot/USB-serial (PORT_HINT_KEYWORDS)
+        dicoba duluan, sisanya menyusul. Dipakai saat auto-detect (port=None)."""
+        ports = list(list_ports.comports())
+        hinted, others = [], []
+        for p in ports:
+            text = f"{p.description or ''} {p.manufacturer or ''}".lower()
+            if any(k in text for k in PORT_HINT_KEYWORDS):
+                hinted.append(p.device)
+            else:
+                others.append(p.device)
+        return hinted + others
+
+    def _attempt_connect_port(self, port: str):
+        """Coba buka koneksi ke SATU port, beberapa kali percobaan dengan jeda
+        singkat. Kadang percobaan pertama gagal handshake hanya karena device
+        baru saja di-plug dan belum 'settle', bukan berarti port itu salah.
+        Return instance Dobot yang siap dipakai, atau None kalau gagal total."""
+        for attempt in range(1, PORT_CONNECT_MAX_ATTEMPTS + 1):
+            device = None
+            try:
+                log.info("Mencoba menghubungkan ke Dobot di %s (percobaan %d)...", port, attempt)
+                device = Dobot(port=port)
+                device.speed(DEFAULT_VELOCITY, DEFAULT_ACCELERATION)
+                return device
+            except Exception as exc:
+                log.warning("Gagal konek ke %s (percobaan %d): [%s] %r",
+                            port, attempt, type(exc).__name__, str(exc))
+                # Tutup handle yang mungkin sudah terbuka separuh, supaya port
+                # tidak 'terkunci' dan bisa dicoba lagi / dipakai port berikutnya.
+                if device is not None:
+                    try:
+                        device.close()
+                    except Exception:
+                        try:
+                            device._ser.close()
+                        except Exception:
+                            pass
+                time.sleep(PORT_CONNECT_RETRY_DELAY_S)
+        return None
+
     def connect(self, port: Optional[str] = None) -> bool:
         with self._lock:
             if Dobot is None:
@@ -81,28 +128,47 @@ class DobotManager:
             if self._device is not None:
                 self.disconnect()
 
-            try:
-                log.info("Menghubungkan ke Dobot%s...", f" di {port}" if port else " (auto-detect)")
-                self._device = Dobot(port=port)
-                self._device.speed(DEFAULT_VELOCITY, DEFAULT_ACCELERATION)
-
-                actual_port = port
-                try:
-                    actual_port = self._device._ser.port
-                except Exception:
-                    pass
-
-                self.state.connected = True
-                self.state.port = actual_port
-                self.state.last_error = None
-                self._refresh_pose_locked()
-                log.info("Dobot terhubung di %s", actual_port)
-            except Exception as exc:
-                self._device = None
-                self.state.connected = False
-                self.state.last_error = f"Gagal terhubung: {exc}"
+            # Kalau port diminta eksplisit (mis. dipilih dari dropdown frontend),
+            # cukup coba port itu saja. Kalau tidak (auto-detect), scan semua
+            # port yang tersedia, port yang match keyword Dobot dicoba duluan.
+            candidates = [port] if port else self._list_candidate_ports()
+            if not candidates:
+                self.state.last_error = ("Tidak ada serial port terdeteksi sama sekali. "
+                                          "Pastikan kabel USB Dobot terpasang.")
                 log.warning(self.state.last_error)
                 return False
+
+            log.info("Port kandidat yang akan dicoba: %s", candidates)
+
+            device = None
+            connected_port = None
+            for candidate_port in candidates:
+                device = self._attempt_connect_port(candidate_port)
+                if device is not None:
+                    connected_port = candidate_port
+                    break
+
+            if device is None:
+                self.state.connected = False
+                self.state.last_error = (
+                    f"Dobot tidak ditemukan/gagal dikonek di {len(candidates)} "
+                    f"port yang dicoba: {candidates}"
+                )
+                log.warning(self.state.last_error)
+                return False
+
+            self._device = device
+            actual_port = connected_port
+            try:
+                actual_port = self._device._ser.port
+            except Exception:
+                pass
+
+            self.state.connected = True
+            self.state.port = actual_port
+            self.state.last_error = None
+            self._refresh_pose_locked()
+            log.info("Dobot terhubung di %s", actual_port)
 
         # Homing fisik HANYA dijalankan SEKALI selama proses backend ini hidup,
         # persis seperti pola HMI.py -> Main.py: dipicu otomatis tepat setelah
@@ -121,6 +187,7 @@ class DobotManager:
                 log.warning("Homing otomatis gagal: %s", exc)
 
         return True
+
 
     def disconnect(self):
         with self._lock:
