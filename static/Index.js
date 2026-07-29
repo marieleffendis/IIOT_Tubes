@@ -1,5 +1,4 @@
 // Index.js — komunikasi dashboard dengan backend Dobot (index.py)
-// Backend disajikan dari origin yang sama, jadi endpoint API relatif saja.
 
 const STATUS_POLL_MS = 3000;
 
@@ -13,11 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(refreshStatus, STATUS_POLL_MS);
 });
 
-// --- Sumbu X / Y / Z (jog relatif) ------------------------------------
+// --- Sumbu X / Y / Z / R (jog relatif) ------------------------------------
 function initAxisButtons() {
-    document.querySelectorAll('.axis-control[data-axis="x"], .axis-control[data-axis="y"], .axis-control[data-axis="z"]')
+    document.querySelectorAll('.axis-control[data-axis="x"], .axis-control[data-axis="y"], .axis-control[data-axis="z"], .axis-control[data-axis="r"]')
         .forEach((block) => {
-            const axis = block.dataset.axis; // "x", "y", atau "z"
+            const axis = block.dataset.axis; // "x", "y", "z", atau "r"
             block.querySelectorAll('button[data-direction]').forEach((button) => {
                 button.addEventListener('click', () => {
                     sendJog(axis, button.dataset.direction, button);
@@ -32,7 +31,7 @@ async function sendJog(axis, direction, button) {
         const res = await fetch('/api/jog', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ axis, direction }), // Kirim 'axis' dan 'direction'
+            body: JSON.stringify({ axis, direction }),
         });
         const data = await res.json();
         if (data.ok) {
@@ -51,7 +50,7 @@ async function sendJog(axis, direction, button) {
 function initToggleButtons() {
     document.querySelectorAll('.axis-control[data-axis="suction"], .axis-control[data-axis="conveyor"]')
         .forEach((block) => {
-            const axis = block.dataset.axis; // "suction" | "conveyor"
+            const axis = block.dataset.axis; 
             block.querySelectorAll('button').forEach((button) => {
                 button.addEventListener('click', () => {
                     const enable = button.classList.contains('btn-on');
@@ -159,14 +158,13 @@ function updateHomingBanner(isHoming) {
     banner.classList.toggle('is-active', isHoming);
 }
 
-// Kunci semua tombol jog/suction/conveyor selagi robot fisik sedang homing,
-// supaya tidak ada perintah gerak lain yang bentrok dengan proses homing.
 function setControlsLocked(locked) {
     document
         .querySelectorAll(
             '.axis-control[data-axis="x"] button, ' +
             '.axis-control[data-axis="y"] button, ' +
             '.axis-control[data-axis="z"] button, ' +
+            '.axis-control[data-axis="r"] button, ' +
             '.axis-control[data-axis="suction"] button, ' +
             '.axis-control[data-axis="conveyor"] button'
         )
@@ -194,7 +192,7 @@ function setConnectionStatus(isConnected) {
 function updatePoseReadout(pose) {
     const el = document.getElementById('poseReadout');
     if (!el || !pose) return;
-    el.textContent = `Posisi: X ${pose.x.toFixed(1)}  Y ${pose.y.toFixed(1)}  Z ${pose.z.toFixed(1)}`;
+    el.textContent = `Posisi: X ${pose.x.toFixed(1)}  Y ${pose.y.toFixed(1)}  Z ${pose.z.toFixed(1)}  R ${pose.r.toFixed(1)}`;
 }
 
 function setButtonBusy(button, busy) {

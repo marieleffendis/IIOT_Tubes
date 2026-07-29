@@ -17,7 +17,8 @@
                     <h2>Motion Control</h2>
                     <span class="panel-heading-sub">Manual Override</span>
                 </div>
-                <div class="pose-readout" id="poseReadout">Posisi: X --.-&nbsp;&nbsp;Y --.-&nbsp;&nbsp;Z --.-</div>
+                <!-- Pose Readout diperbarui untuk menampilkan sumbu R -->
+                <div class="pose-readout" id="poseReadout">Posisi: X --.-&nbsp;&nbsp;Y --.-&nbsp;&nbsp;Z --.-&nbsp;&nbsp;R --.-</div>
 
                 <div class="homing-banner" id="homingBanner">
                     <span class="homing-dot"></span>
@@ -48,6 +49,15 @@
                     <div class="button-group">
                         <button data-direction="up"><span class="chevron">▲</span>Atas</button>
                         <button data-direction="down">Bawah<span class="chevron">▼</span></button>
+                    </div>
+                </div>
+
+                <div class="axis-control R-Axis" data-axis="r">
+                    <span class="axis-tag" style="background-color: var(--axis-r);">R</span>
+                    <p>R-Axis Rotation</p>
+                    <div class="button-group">
+                        <button data-direction="counterclockwise"><span class="chevron">↺</span>Kiri</button>
+                        <button data-direction="clockwise">Kanan<span class="chevron">↻</span></button>
                     </div>
                 </div>
 

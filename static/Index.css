@@ -14,6 +14,7 @@
     --axis-x: #06b6d4;
     --axis-y: #ec4899;
     --axis-z: #f59e0b;
+    --axis-r: #f76b6b;
     --axis-suction: #8b5cf6;
     --axis-conveyor: #10b981;
     --status-online: #10b981;
@@ -218,6 +219,9 @@ section.motion_control {
 .Z-Axis { border-left-color: var(--axis-z); }
 .Z-Axis .axis-tag { background-color: var(--axis-z); }
 
+.R-Axis { border-left-color: var(--axis-r); }
+.R-Axis .axis-tag { background-color: var(--axis-r); }
+
 .Suction { border-left-color: var(--axis-suction); }
 .Suction .axis-tag { background-color: var(--axis-suction); }
 
@@ -275,6 +279,7 @@ section.motion_control {
 .X-Axis button:hover, .Y-Axis button:hover { color: var(--axis-x); }
 .Y-Axis button:hover { color: var(--axis-y); }
 .Z-Axis button:hover { color: var(--axis-z); }
+.R-Axis button:hover { color: var(--axis-r); } /* Hover color untuk Sumbu R */
 
 .chevron {
     font-size: 0.7rem;

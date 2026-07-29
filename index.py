@@ -21,28 +21,27 @@ log = logging.getLogger("dobot-backend")
 # ---------------------------------------------------------------------------
 STEP_XY_MM = 20.0           # Jarak jog sumbu X & Y per klik (mm)
 STEP_Z_MM = 20.0            # Jarak jog sumbu Z per klik (mm)
+STEP_R_DEG = 10.0           # Sudut jog sumbu R per klik (derajat)  <-- TAMBAHAN BARU
 DEFAULT_VELOCITY = 100.0    
 DEFAULT_ACCELERATION = 100.0
 CONVEYOR_SPEED = 0.5        # Kecepatan default conveyor (0.0 - 1.0)
 RECONNECT_INTERVAL_S = 5    
 HOMING_DURATION_S = 20       # Jeda tunggu setelah home() dikirim ke Dobot (detik)
 
-# Kata kunci untuk mengenali kandidat port Dobot lebih dulu (dicoba paling awal
-# saat auto-detect). Kalau tidak ada yang cocok, port lain tetap dicoba juga.
 PORT_HINT_KEYWORDS = ["dobot", "cp210", "ch340", "silicon labs", "usb-serial", "usb serial"]
-PORT_CONNECT_MAX_ATTEMPTS = 2      # percobaan per port sebelum pindah ke port berikutnya
-PORT_CONNECT_RETRY_DELAY_S = 0.8   # jeda antar percobaan di port yang sama
+PORT_CONNECT_MAX_ATTEMPTS = 2      
+PORT_CONNECT_RETRY_DELAY_S = 0.8   
 
-# Pemetaan perintah dari frontend JavaScript ke arah gerak relatif (dx, dy, dz)
-# Sesuaikan teks key ini jika label di tombol HTML Anda berbeda.
-# Pemetaan perintah dari frontend JavaScript (axis, direction) ke arah gerak relatif (dx, dy, dz)
+# Pemetaan perintah dari frontend JavaScript (axis, direction) ke arah gerak relatif (dx, dy, dz, dr)
 AXIS_DIRECTIONS = {
-    ("x", "forward"):  (+1, 0, 0),   # Sumbu X Maju
-    ("x", "backward"): (-1, 0, 0),   # Sumbu X Mundur
-    ("y", "left"):     (0, -1, 0),   # Sumbu Y Kiri
-    ("y", "right"):    (0, +1, 0),   # Sumbu Y Kanan
-    ("z", "up"):       (0, 0, +1),   # Sumbu Z Naik
-    ("z", "down"):     (0, 0, -1),   # Sumbu Z Turun
+    ("x", "forward"):          (+1, 0, 0, 0),   # Sumbu X Maju
+    ("x", "backward"):         (-1, 0, 0, 0),   # Sumbu X Mundur
+    ("y", "left"):             (0, -1, 0, 0),   # Sumbu Y Kiri
+    ("y", "right"):            (0, +1, 0, 0),   # Sumbu Y Kanan
+    ("z", "up"):               (0, 0, +1, 0),   # Sumbu Z Naik
+    ("z", "down"):             (0, 0, -1, 0),   # Sumbu Z Turun
+    ("r", "clockwise"):        (0, 0, 0, +1),   # Rotasi R Searah Jarum Jam      <-- TAMBAHAN BARU
+    ("r", "counterclockwise"): (0, 0, 0, -1),   # Rotasi R Berlawanan Arah     <-- TAMBAHAN BARU
 }
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -78,8 +77,6 @@ class DobotManager:
         return [p.device for p in list_ports.comports()]
 
     def _list_candidate_ports(self):
-        """Urutkan port: yang match keyword Dobot/USB-serial (PORT_HINT_KEYWORDS)
-        dicoba duluan, sisanya menyusul. Dipakai saat auto-detect (port=None)."""
         ports = list(list_ports.comports())
         hinted, others = [], []
         for p in ports:
@@ -91,10 +88,6 @@ class DobotManager:
         return hinted + others
 
     def _attempt_connect_port(self, port: str):
-        """Coba buka koneksi ke SATU port, beberapa kali percobaan dengan jeda
-        singkat. Kadang percobaan pertama gagal handshake hanya karena device
-        baru saja di-plug dan belum 'settle', bukan berarti port itu salah.
-        Return instance Dobot yang siap dipakai, atau None kalau gagal total."""
         for attempt in range(1, PORT_CONNECT_MAX_ATTEMPTS + 1):
             device = None
             try:
@@ -105,8 +98,6 @@ class DobotManager:
             except Exception as exc:
                 log.warning("Gagal konek ke %s (percobaan %d): [%s] %r",
                             port, attempt, type(exc).__name__, str(exc))
-                # Tutup handle yang mungkin sudah terbuka separuh, supaya port
-                # tidak 'terkunci' dan bisa dicoba lagi / dipakai port berikutnya.
                 if device is not None:
                     try:
                         device.close()
@@ -128,9 +119,6 @@ class DobotManager:
             if self._device is not None:
                 self.disconnect()
 
-            # Kalau port diminta eksplisit (mis. dipilih dari dropdown frontend),
-            # cukup coba port itu saja. Kalau tidak (auto-detect), scan semua
-            # port yang tersedia, port yang match keyword Dobot dicoba duluan.
             candidates = [port] if port else self._list_candidate_ports()
             if not candidates:
                 self.state.last_error = ("Tidak ada serial port terdeteksi sama sekali. "
@@ -170,24 +158,13 @@ class DobotManager:
             self._refresh_pose_locked()
             log.info("Dobot terhubung di %s", actual_port)
 
-        # Homing fisik HANYA dijalankan SEKALI selama proses backend ini hidup,
-        # persis seperti pola HMI.py -> Main.py: dipicu otomatis tepat setelah
-        # koneksi pertama kali berhasil (mis. saat aplikasi pertama dibuka).
-        # Dijalankan DI LUAR lock (di atas) supaya /api/status tetap bisa
-        # dipoll frontend untuk menampilkan progress selama ~20 detik ini.
-        # Kalibrasi ini dianggap tetap valid di firmware Dobot selama proses
-        # backend tidak restart / power Dobot tidak mati, sehingga aksi jog,
-        # suction, conveyor (mode Manual & Auto) tidak perlu homing ulang.
         if not self.state.homed:
             try:
                 self.home()
             except Exception as exc:
-                # Koneksi tetap dianggap berhasil walau homing awal gagal;
-                # bisa dipicu ulang manual lewat POST /api/home.
                 log.warning("Homing otomatis gagal: %s", exc)
 
         return True
-
 
     def disconnect(self):
         with self._lock:
@@ -220,20 +197,6 @@ class DobotManager:
         self.state.last_error = str(exc)
 
     def home(self, force: bool = False) -> bool:
-        """
-        Menjalankan proses homing fisik Dobot (~20 detik).
-
-        PENTING: homing di sini HANYA dijalankan sekali selama proses backend
-        ini hidup (dipicu otomatis oleh connect() saat koneksi pertama kali
-        berhasil). Ini supaya endpoint lain (jog, suction, conveyor -- mode
-        Manual & Auto) tidak perlu mengulang homing setiap kali dipanggil.
-        Kalibrasi homing tetap tersimpan di firmware Dobot selama tidak mati
-        listrik / proses backend tidak di-restart.
-
-        Set force=True (mis. lewat POST /api/home {"force": true}) untuk
-        memaksa homing ulang, misalnya jika robot dicurigai kehilangan
-        kalibrasi karena tersenggol atau kabel sempat lepas.
-        """
         with self._lock:
             self._ensure_connected()
 
@@ -251,16 +214,12 @@ class DobotManager:
                 self._mark_disconnected(exc)
                 raise
 
-        # Jeda manual DI LUAR lock, supaya /api/status tetap responsif dan bisa
-        # dipoll frontend untuk menampilkan progress ("homing": true) selama
-        # proses ini berlangsung.
         log.info("Menunggu homing selesai (%d detik)...", HOMING_DURATION_S)
         time.sleep(HOMING_DURATION_S)
 
         with self._lock:
             self.state.homing = False
             if not self.state.connected:
-                # Koneksi sempat putus selagi menunggu homing selesai.
                 return False
             self.state.homed = True
             try:
@@ -279,11 +238,24 @@ class DobotManager:
             if key not in AXIS_DIRECTIONS:
                 raise ValueError(f"Perintah tidak dikenal: {key}")
 
-            dx, dy, dz = AXIS_DIRECTIONS[key]
-            step = STEP_Z_MM if axis == "z" else STEP_XY_MM
+            dx, dy, dz, dr = AXIS_DIRECTIONS[key]
+            
+            # Tentukan besaran step masing-masing sumbu
+            if axis == "z":
+                step_val = STEP_Z_MM
+            elif axis == "r":
+                step_val = STEP_R_DEG
+            else:
+                step_val = STEP_XY_MM
 
             try:
-                self._device.move_rel(x=dx * step, y=dy * step, z=dz * step, r=0, wait=True)
+                self._device.move_rel(
+                    x=dx * (step_val if axis == "x" else 0), 
+                    y=dy * (step_val if axis == "y" else 0), 
+                    z=dz * (step_val if axis == "z" else 0), 
+                    r=dr * (step_val if axis == "r" else 0), 
+                    wait=True
+                )
                 self._refresh_pose_locked()
             except Exception as exc:
                 self._mark_disconnected(exc)
@@ -366,14 +338,6 @@ def api_disconnect():
 
 @app.route("/api/home", methods=["POST"])
 def api_home():
-    """
-    Trigger homing manual (opsional).
-    Body JSON: {"force": true} -> paksa homing ulang meski status.homed sudah True.
-    Dalam pemakaian normal endpoint ini tidak wajib dipanggil, karena homing
-    pertama sudah otomatis terjadi saat koneksi pertama berhasil (lihat
-    DobotManager.connect). Sediakan ini untuk kasus robot dicurigai
-    kehilangan kalibrasi tanpa perlu restart backend.
-    """
     body = request.get_json(silent=True) or {}
     force = bool(body.get("force", False))
     try:
