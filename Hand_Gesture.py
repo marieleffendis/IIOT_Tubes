@@ -326,7 +326,7 @@ def main():
         min_tracking_confidence=0.5,
     )
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1)
     tip_ids = [4, 8, 12, 16, 20]
 
     last_jog_time = 0.0
@@ -355,7 +355,7 @@ def main():
         screen_h = _root.winfo_screenheight()
         _root.destroy()
     except Exception:
-        screen_w, screen_h = 1920, 1080  # fallback kalau tkinter tidak tersedia
+        screen_w, screen_h = 640, 480  # fallback kalau tkinter tidak tersedia
 
     cv2.resizeWindow(window_name, screen_w, screen_h)
     cv2.moveWindow(window_name, 0, 0)
