@@ -39,8 +39,8 @@ PORT_CONNECT_RETRY_DELAY_S = 0.8   # jeda antar percobaan di port yang sama
 AXIS_DIRECTIONS = {
     ("x", "forward"):  (+1, 0, 0),   # Sumbu X Maju
     ("x", "backward"): (-1, 0, 0),   # Sumbu X Mundur
-    ("y", "left"):     (0, +1, 0),   # Sumbu Y Kiri
-    ("y", "right"):    (0, -1, 0),   # Sumbu Y Kanan
+    ("y", "left"):     (0, -1, 0),   # Sumbu Y Kiri
+    ("y", "right"):    (0, +1, 0),   # Sumbu Y Kanan
     ("z", "up"):       (0, 0, +1),   # Sumbu Z Naik
     ("z", "down"):     (0, 0, -1),   # Sumbu Z Turun
 }
