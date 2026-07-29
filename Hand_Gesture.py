@@ -44,8 +44,8 @@ GESTURE_TO_JOG = {
 AXIS_DIRECTIONS = {
     ("x", "forward"):  (+1, 0, 0),
     ("x", "backward"): (-1, 0, 0),
-    ("y", "left"):     (0, +1, 0),
-    ("y", "right"):    (0, -1, 0),
+    ("y", "left"):     (0, -1, 0),
+    ("y", "right"):    (0, +1, 0),
     ("z", "up"):       (0, 0, +1),
     ("z", "down"):     (0, 0, -1),
 }
