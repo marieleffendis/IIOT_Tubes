@@ -26,9 +26,9 @@ def main():
         sys.exit(1)
 
     print("[INFO] Memulai proses Homing. Pastikan area sekitar robot KOSONG!")
-    print("[INFO] Menunggu homing selesai (20 detik)...")
+    print("[INFO] Menunggu homing selesai (30 detik)...")
     device.home()
-    time.sleep(20)  # Jeda manual untuk homing
+    time.sleep(25)  # Jeda manual untuk homing
     print("[INFO] Homing dianggap selesai, siap menjalankan conveyor!")
     sys.exit(0)
 

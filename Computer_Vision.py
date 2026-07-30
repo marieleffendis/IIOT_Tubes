@@ -9,11 +9,11 @@ COLOR_RANGES = {
     ],
     "Hijau": [(np.array([40, 50, 50]), np.array([90, 255, 255]))],
     "Kuning": [(np.array([20, 100, 100]), np.array([30, 255, 255]))],
-    "Biru": [(np.array([100, 150, 0]), np.array([140, 255, 255]))]
+    "Biru": [(np.array([95, 80, 50]), np.array([135, 255, 255]))]
 }
 
 # Definisi ROI (Area Deteksi). Sesuaikan dengan posisi fisik conveyor di kamera.
-ROI_X, ROI_Y, ROI_W, ROI_H = 215, 100, 140, 280
+ROI_X, ROI_Y, ROI_W, ROI_H = 235, 145, 235, 150
 MIN_CONTOUR_AREA = 500
 
 def is_inside_roi(cX, cY):
@@ -29,7 +29,7 @@ def is_inside_pick_zone(cX, cY):
         ROI_Y + PICK_MARGIN_Y <= cY <= ROI_Y + ROI_H - PICK_MARGIN_Y
     )
 
-def setup_camera(fps=30, width=640, height=480):
+def setup_camera(fps=30, width=800, height=600):
     """Inisialisasi VideoCapture dengan parameter standar yang dipakai kedua mode."""
     cap = cv2.VideoCapture(0)  # Sesuaikan indeks kamera Anda (0, 1, atau 2)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))

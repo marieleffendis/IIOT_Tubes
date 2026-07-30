@@ -27,7 +27,7 @@ def connect_dobot():
 
     # Pilih port pertama secara default.
     # Jika sistem Anda selalu butuh port tertentu, ubah di sini.
-    port = available_ports[1].device
+    port = available_ports[0].device
 
     print(f"[INFO] Mencoba terhubung ke Dobot di port: {port}...")
     try:
@@ -44,12 +44,12 @@ def connect_dobot():
 # KONFIGURASI KOORDINAT DOBOT
 # =========================================================
 Z_HOVER = 50
-Z_PICK = -12
+Z_PICK = -8
 HOME_R = 0
 
-HOME_X = 4.5
-HOME_Y = 270
-HOME_Z = 50
+HOME_X = 111
+HOME_Y = -191
+HOME_Z = 100
 
 CONVEYOR_SPEED = 0.45
 CONVEYOR_DELAY = 1.16
@@ -59,41 +59,42 @@ CONVEYOR_DELAY = 1.16
 # KALIBRASI KAMERA -> DOBOT
 # =========================================================
 pts_kamera = np.array([
-    [330, 120],
-    [327, 358],
-    [230, 362],
-    [230, 117],
-    [312, 203],
-    [308, 170],
-    [274, 230],
-    [319, 275],
-    [268, 298],
-    [325, 297],
-    [269, 138],
-    [242, 180],
-    [237, 279],
-    [256, 332],
-    [294, 251],
+    [437, 177],
+    [437, 264],
+    [267, 264],
+    [267, 177],
+    [324, 177],
+    [380, 177],
+    [267, 206],
+    [324, 206],
+    [380, 206],
+    [437, 206],
+    [267, 235],
+    [324, 235],
+    [380, 235],
+    [437, 235],
+    [324, 264],
+    [380, 264],
 ], dtype="float32")
 
 pts_dobot = np.array([
-    [216.1, 141.5],
-    [212.9, -43.2],
-    [134.6, -43.2],
-    [135.9, 142.5],
-    [198.7, 79.1],
-    [196.3, 102.9],
-    [169.5, 57.8],
-    [204.7, 20.8],
-    [164.3, 5.1],
-    [209.7, 6.3],
-    [168.2, 126.7],
-    [144.6, 95.1],
-    [139.8, 20.2],
-    [157.6, -21.2],
-    [186.4, 41.4],
+    [214.0, 97.6],
+    [215.6, 58.9],
+    [144.1, 56.6],
+    [144.5, 94.9],
+    [167.3, 92.7],
+    [190.0, 95.4],
+    [144.1, 81.7],
+    [168.6, 82.6],
+    [189.9, 83.9],
+    [214.1, 82.1],
+    [142.8, 70.4],
+    [169.5, 70.5],
+    [189.1, 70.1],
+    [212.2, 70.2],
+    [168.0, 57.8],
+    [189.8, 57.4],
 ], dtype="float32")
-
 MATRIKS_KALIBRASI, status = cv2.findHomography(pts_kamera, pts_dobot)
 
 
@@ -209,7 +210,7 @@ def start_conveyor():
         return
 
     print("[CONVEYOR] START")
-    device.conveyor_belt(speed=CONVEYOR_SPEED, direction=1)
+    device.conveyor_belt(speed=CONVEYOR_SPEED, direction=-1)
 
 
 def stop_conveyor():
@@ -219,4 +220,4 @@ def stop_conveyor():
         return
 
     print("[CONVEYOR] STOP")
-    device.conveyor_belt(speed=0, direction=1)
+    device.conveyor_belt(speed=0, direction=-1)
